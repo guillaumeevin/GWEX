@@ -1,0 +1,20 @@
+Package: GWEX
+Type: Package
+Date: 2019-02-25
+License: GPL-3
+Title: Multi-Site Stochastic Models for Daily Precipitation and Temperature
+Version: 1.0.1
+Authors@R: c(person("Guillaume","Evin",role = c("aut", "cre"),email="guillaume.evin@irstea.fr"))
+Author: Guillaume Evin [aut, cre]
+Maintainer: Guillaume Evin <guillaume.evin@irstea.fr>
+Imports: EnvStats, MASS, mvtnorm, nleqslv, fGarch, parallel, abind, foreach, doParallel, Renext, lmomco, methods, stats
+Description: Application of multi-site models for daily precipitation and temperature data. 
+  This package is designed for an application to 105 precipitation and 26 temperature gauges located in Switzerland.
+  It applies fitting procedures and provides weather generators described in the following references:
+  - Evin, G., A.-C. Favre, and B. Hingray. (2018) <doi:10.5194/hess-22-655-2018>.
+  - Evin, G., A.-C. Favre, and B. Hingray. (2018) <doi:10.1007/s00704-018-2404-x>.
+Depends: R (>= 2.10)
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.1.0
+NeedsCompilation: yes
