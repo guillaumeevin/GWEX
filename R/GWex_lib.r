@@ -218,8 +218,8 @@ setClass(
   validity=function(object){
     if(class(object@date) != 'Date'){
       return("date must be a vector of 'Date'")
-    }else if(class(object@obs) != 'matrix'){
-      return("obs must be a matrix nDay x nStation")
+    }else if(length(dim(object@obs)) != 2){
+      return("obs must be a 2-dimensional matrix nDay x nStation")
     }else{
       return(TRUE)
     }
