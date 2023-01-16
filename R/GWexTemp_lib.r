@@ -237,6 +237,9 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
     condPrec = F
   }
   listOption[['condPrec']] = condPrec
+  
+  # isParallel: not for temperature
+  listOption[['isParallel']] = FALSE
 
   # typeMargin: 'SGED' (default) or 'Gaussian'
   if('typeMargin' %in% names(listOption)){

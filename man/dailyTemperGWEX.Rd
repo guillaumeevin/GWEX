@@ -4,7 +4,9 @@
 \name{dailyTemperGWEX}
 \alias{dailyTemperGWEX}
 \title{daily observations of temperature data}
-\format{matrix of Observed temperature: 3652 days x 3 stations}
+\format{
+matrix of Observed temperature: 3652 days x 3 stations
+}
 \usage{
 data(dailyTemperGWEX)
 }

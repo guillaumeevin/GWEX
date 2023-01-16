@@ -4,17 +4,21 @@
 \alias{fitGwexModel}
 \title{fitGwexModel: fit a GWex model to observations.}
 \usage{
-fitGwexModel(objGwexObs, listOption = NULL)
+fitGwexModel(objGwexObs, parMargin = NULL, listOption = NULL)
 }
 \arguments{
 \item{objGwexObs}{an object of class \code{\linkS4class{GwexObs}}}
+
+\item{parMargin}{(not required for temperature) list parMargin where
+and each element corresponds to a month (1...12) and contains a 
+matrix nStation x 3 of pre-estimated parameters of the marginal distributions
+(EGPD or Mixture of Exponentials)}
 
 \item{listOption}{for precipitation, a list with the following fields:
 \itemize{
   \item \strong{th}: threshold value in mm above which precipitation observations are considered to be non-zero (=0.2 by default)
   \item \strong{nLag}: order of the Markov chain for the transitions between dry and wet states (=2 by default)
   \item \strong{typeMargin}: 'EGPD' (Extended GPD) or 'mixExp' (Mixture of Exponentials). 'EGPD' by default
-  \item \strong{xiHat}: pre-determined values for the xi parameters of the EGPD distribution on precipitation amounts
   \item \strong{copulaInt}: 'Gaussian' or 'Student': type of dependence for amounts (='Student' by default)
   \item \strong{isMAR}: logical value, do we apply a Autoregressive Multivariate Autoregressive model (order 1) =TRUE by default
   \item \strong{is3Damount}: logical value, do we apply the model on 3D-amount. =FALSE by default
@@ -56,26 +60,18 @@ to=as.Date("31/12/2014",format="\%d/\%m/\%Y"),by='day')
 # Format observations: create a G-Wex object
 myObsPrec = GwexObs(variable='Prec',date=vecDates,obs=dailyPrecipGWEX[,1:2])
 
-# Example of a data.frame which can be used for 'xiHat'. For each month, xi values 
-#can be prescribed, for example using a regionalisation method.
-xiReg = data.frame(station=c('S1','S2','S3'),JAN=c(0,0,0.06),FEB=c(0,0,0.06),
-MAR=c(0,0,0.01),APR=c(0,0,0.01),MAY=c(0,0,0.01),
-JUN=c(0,0.01,0.14),JUL=c(0,0.01,0.14),AUG=c(0,0.01,0.14),
-SEP=c(0,0,0.02),OCT=c(0,0,0.02),NOV=c(0,0,0.02),
-DEC=c(0,0,0.06))
-
 # Options: specify the threshold for precipitation (0.5 mm) to distinguish wet and 
-# dry states (th), xi values for the DGPD distribution (xiHat), a Student copula for 
+# dry states (th), a Student copula for 
 # the spatial dependence (copulaInt), a model based on 3-day aggregated values 
 # (is3Damount), a MAR(1) process (isMAR), a EGPD distribution for marginal intensities
 # ('typeMargin'), and 200 replicates for the runs used during the fitting process
 # (this value being 100,000 by default, in order to obtain a reasonable precision of the 
 # estimates) 
-list.options = list(th=0.5,nLag=1,xiHat=xiReg,copulaInt='Student',is3Damount=TRUE,isMAR=TRUE,
+listOption = list(th=0.5,nLag=1,copulaInt='Student',is3Damount=TRUE,isMAR=TRUE,
 typeMargin='EGPD',nChainFit=200)
 
 # Fit precipitation model
-myParPrec = fitGwexModel(myObsPrec,list.options) # fit model
+myParPrec = fitGwexModel(myObsPrec,listOption=listOption) # fit model
 myParPrec # print object
 
 ###############################################################

@@ -4,7 +4,9 @@
 \name{dailyPrecipGWEX}
 \alias{dailyPrecipGWEX}
 \title{daily observations of precipitation data}
-\format{matrix of Observed precipitation: 3652 days x 3 stations}
+\format{
+matrix of Observed precipitation: 3652 days x 3 stations
+}
 \usage{
 data(dailyPrecipGWEX)
 }
