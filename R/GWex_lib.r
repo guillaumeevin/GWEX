@@ -214,6 +214,8 @@ setClass(
       return("date must be a vector of 'Date'")
     }else if(length(dim(object@obs)) != 2){
       return("obs must be a 2-dimensional matrix nDay x nStation")
+    }else if(nrow(object@obs) != length(object@date)){
+      return("obs must have the same number of lines than the 'Date' object")
     }else{
       return(TRUE)
     }
@@ -631,7 +633,7 @@ is.GwexSim <- function(obj) is(obj, 'GwexSim')
 #' # generate 2 scenarios for one year, using an existing 'GwexFit' object
 #' myParPrec = fitGwexModel(myObsPrec) # fit model
 #' mySimPrec = simGwexModel(objGwexFit=myParPrec, nb.rep=2, d.start=vecDates[1],
-#' d.end=vecDates[365],objGwexObs=myObsPrec)
+#' d.end=vecDates[10],objGwexObs=myObsPrec)
 #' mySimPrec # print object
 #'
 #' ###############################################################
@@ -703,12 +705,12 @@ simGwexModel <- function(objGwexFit, nb.rep = 10, d.start=as.Date("01011900","%d
     # close cluster
   }else{
     sim.GWex.out = array(dim=c(n,p,nb.rep))
-    for(iSim in 2:nb.rep){
+    for(iSim in 1:nb.rep){
       if(typeVar=='Prec'){
         sim.GWex.out[,,iSim] = sim.GWex.prec.1it(objGwexFit,vecDates,myseed=iSim,objGwexObs=objGwexObs,prob.class=prob.class)
       }else if(typeVar=='Temp'){
         if(condPrec){
-          matSimPrec = simPrec[,,iSim]
+          matSimPrec = simPrec[,,iSim,drop=FALSE]
         }else{
           matSimPrec = NULL
         }

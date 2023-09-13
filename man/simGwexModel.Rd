@@ -55,7 +55,7 @@ list.options = list(nChainFit=1000)
 # generate 2 scenarios for one year, using an existing 'GwexFit' object
 myParPrec = fitGwexModel(myObsPrec) # fit model
 mySimPrec = simGwexModel(objGwexFit=myParPrec, nb.rep=2, d.start=vecDates[1],
-d.end=vecDates[365],objGwexObs=myObsPrec)
+d.end=vecDates[10],objGwexObs=myObsPrec)
 mySimPrec # print object
 
 ###############################################################

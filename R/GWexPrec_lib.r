@@ -112,6 +112,7 @@ lag.trans.proba.vector.byClass = function(vec.prec, # vector nx1 of precipitatio
   prF = comb.pr$P[1:(nPr/2)]
   prT = comb.pr$P[(nPr/2+1):nPr]
   PrCond = prT/(prF+prT)
+  PrCond[prF+prT==0] = 0 
   comb.prT = comb.pr[(nPr/2+1):nPr,1:nlag,drop=F]
   comb.prT$P = PrCond
   
@@ -1131,6 +1132,12 @@ joint.proba.occ = function(P,th){
       # no nan
       nz = (!is.na(ri)) & (!is.na(rj))
       
+      if(sum(nz)==0){
+        stop(paste0("fitGwexModel fails because there are too many missing values at",
+             " columns ",i," and ",j," (i.e. no simultaneous data are avaible for this",
+             "month and this couple of stations)"))
+      }
+      
       # dry-dry
       p00ij = mean(ri[nz]<=th&rj[nz]<=th)
       p00[i,j] = p00ij
@@ -1200,6 +1207,116 @@ cor.obs.occ = function(pi00,pi0,pi1){
   return(cor.obs)
 }
 
+
+#==============================================================================
+#' infer.autocor.amount
+#'
+#' special case of \code{\link{infer.dep.amount}} where there is only one station
+#' @param P.mat precipitation matrix
+#' @param pr.state probabilities of transitions for a Markov chain with lag \code{p}.
+#' @param isPeriod vector of logical n x 1 indicating the days concerned by a 3-month period
+#' @param nLag order of he Markov chain for the transitions between dry and wet states (=2 by default)
+#' @param th threshold above which we consider that a day is wet (e.g. 0.2 mm)
+#' @param parMargin parameters of the margins 2 x 3
+#' @param typeMargin 'EGPD' (Extended GPD) or 'mixExp' (Mixture of Exponentials). 'EGPD' by default
+#' @param nChainFit integer, length of the runs used during the fitting procedure. =100000 by default
+#' @param isMAR logical value, do we apply a Autoregressive Multivariate Autoregressive model (order 1) =TRUE by default
+#' @param isParallel logical: indicate computation in parallel or not (easier for debugging)
+#' 
+#' @return \item{list}{list of estimates (e.g., M0, dfStudent)}
+#'
+#' @author Guillaume Evin
+infer.autocor.amount = function(P.mat,pr.state,isPeriod,nLag,th,parMargin,typeMargin,nChainFit,
+                            isMAR,isParallel){
+  # find remaining parameters if necessary
+  if(isMAR){
+    # Class = Period
+    isClass = isPeriod
+    
+    # number of stations
+    p = ncol(P.mat)
+    n = nrow(P.mat)
+    
+    # filtered data for this class: replace small values below the threshold by zero
+    # for the sake of comparison with simulated values
+    P.st = P.mat[isClass,]
+    is.Zero = P.st<=th&!is.na(P.st)
+    P.st[is.Zero] = 0
+    
+    ### with one station, the MAR(1) simplifies to an AR(1) process
+    
+    # on the contrary to GWEX, here I consider all days of the class (where there might
+    # not be many elements) and the corr. previous days in order to increase the possible
+    # days (instead of consider only days which have also previous days within the same class)
+    indClassCur = which(isClass)
+    if(indClassCur[1]==1) indClassCur = indClassCur[2:length(indClassCur)]
+    indClassPrev = indClassCur-1
+    
+    # on the contrary to GWEX, here I consider all days of the class (where there might
+    # not be many elements) and the corr. previous days in order to increase the possible
+    # days (instead of consider only days which have also previous days within the same class)
+    ar1.obs = cor(P.st[indClassPrev],P.st[indClassCur],use="pairwise.complete.obs")
+    
+    # retrieve some objects and simulations that are done in get.M0 and infer.mat.omega
+    
+    # filtered matrix of precipitation for this period (3-mon moving window by dafault)
+    P.mat.class = P.mat[isClass,,drop=FALSE]
+    
+    # observed correlation of dry/wet states (see Eq. 6 in Evin et al. 2018)
+    pi0 = dry.day.frequency(P.mat.class,th)
+    pi1 = wet.day.frequency(P.mat.class,th)
+    
+    # number of possible transitions
+    n.comb = 2^nLag
+    
+    # a matrix of possible combination n.comb x nLag
+    mat.comb = as.matrix(pr.state[[1]][,1:nLag])
+    
+    #####   #####   #####   #####   ##### 
+    ##### prob / normal quantiles of transitions
+    #####   #####   #####   #####   ##### 
+    
+    # retrieve the last column (pobabilities) for all stations
+    # return a list with one field per station containing a vector n.comb x 1
+    # of transition probabilites
+    Ptrans.list = lapply(pr.state,'[',nLag+1)
+    
+    # transform to normal quantiless
+    Qtrans.list = lapply(Ptrans.list,function(x) qnorm(unlist(x)))
+    
+    # reshape in a matrix nStation x n.comb
+    Qtrans.mat = matrix(unlist(Qtrans.list), ncol=n.comb, byrow=T)
+    
+    # filter infinite values if Pr = 0 or 1
+    Qtrans.mat[Qtrans.mat==-Inf] = -10^5
+    Qtrans.mat[Qtrans.mat==Inf] = 10^5
+    
+    # simulate occurrence (once only)
+    Qtrans = QtransMat2Array(nChainFit,p,Qtrans.mat)
+    Xt = array(0,dim=c(nChainFit,p))
+    rndNorm = stats::rnorm(nChainFit)
+    for(t in (nLag+1):nChainFit){
+      comb = Xt[(t-nLag):(t-1),]==1
+      i.comb = which(apply(mat.comb, 1, function(x) all(x==comb)))
+      qTr = Qtrans[t,1,i.comb]
+      Xt[t,] = (rndNorm[t]<=qTr)
+    }
+    
+    # find corresponding ar(1) parameter
+    ar1 = get.vec.autocor(ar1.obs,Xt,parMargin,typeMargin,nChainFit,isParallel)
+    
+    # variance of the innovations
+    covZ = 1 - ar1^2
+    
+    # standard deviation
+    sdZ = sqrt(covZ)
+    
+    # apply a MAR(1) process: multivariate autoregressive process, order 1
+    par.dep.amount = list(M0=NULL,A=ar1,covZ=covZ,sdZ=sdZ,corZ=NULL)
+  }else{
+    par.dep.amount = NULL
+  }
+}
 
 #==============================================================================
 #' infer.dep.amount
@@ -1509,6 +1626,7 @@ fit.GWex.prec = function(objGwexObs,parMargin,listOption=NULL){
   }
   
   
+  
   #########  Process dates and periods   ######### 
   
   # vector of integers indicating the months (1,1,1,...)
@@ -1519,6 +1637,7 @@ fit.GWex.prec = function(objGwexObs,parMargin,listOption=NULL){
   
   # number of stations
   p = ncol(P.mat)
+  
   
   #########   check parMargin   #########  
   if(!is.null(parMargin)){
@@ -1556,11 +1675,6 @@ fit.GWex.prec = function(objGwexObs,parMargin,listOption=NULL){
   #==============================================================================
   
   for(iMonth in 1:12){
-    # prepare lists
-    list.pr.state[[iMonth]] = list()
-    list.parMargin[[iMonth]] = list()
-    list.mat.omega[[iMonth]] = list()
-    list.par.dep.amount[[iMonth]] = list()
     
     # month
     m = vec.month.char[iMonth]
@@ -1595,19 +1709,31 @@ fit.GWex.prec = function(objGwexObs,parMargin,listOption=NULL){
     #-------------------------------------------
     # - spatial process for wet.dry states
     #-------------------------------------------
-    infer.mat.omega.out = infer.mat.omega(P.mat,is3monthPeriod,listOption$th,listOption$nLag,
-                                          pr.state,listOption$nChainFit,
-                                          listOption$isParallel)
+    if(p==1){
+      infer.mat.omega.out = NULL
+    }else{
+      infer.mat.omega.out = infer.mat.omega(P.mat,is3monthPeriod,listOption$th,listOption$nLag,
+                                            pr.state,listOption$nChainFit,
+                                            listOption$isParallel)
+    }
     list.mat.omega[[iMonth]] = infer.mat.omega.out
     
     
     #-------------------------------------------
     # - spatial process for positive intensities
     #-------------------------------------------
-    infer.dep.amount.out = infer.dep.amount(P.mat,is3monthPeriod,infer.mat.omega.out,
-                                            listOption$nLag,listOption$th,parMargin.class,listOption$typeMargin,
-                                            listOption$nChainFit,listOption$isMAR,listOption$copulaInt,
-                                            listOption$isParallel)
+    if(p==1){
+      infer.dep.amount.out = infer.autocor.amount(P.mat,pr.state,is3monthPeriod,
+                                              listOption$nLag,listOption$th,
+                                              parMargin.class,listOption$typeMargin,
+                                              listOption$nChainFit,listOption$isMAR,
+                                              listOption$isParallel)
+    }else{
+      infer.dep.amount.out = infer.dep.amount(P.mat,is3monthPeriod,infer.mat.omega.out,
+                                              listOption$nLag,listOption$th,parMargin.class,listOption$typeMargin,
+                                              listOption$nChainFit,listOption$isMAR,listOption$copulaInt,
+                                              listOption$isParallel)
+    }
     list.par.dep.amount[[iMonth]] = infer.dep.amount.out
   }
   
@@ -1662,7 +1788,7 @@ disag.3D.to.1D = function(Yobs, # matrix of observed intensities at 24h: (nTobs*
   for(i.s in 1:4){
     # mean obs
     iObs.s = mObsAgg==i.s
-    Yobs.s = YObsAgg[iObs.s,]
+    Yobs.s = YObsAgg[iObs.s,,drop=FALSE]
     mean.s = apply(Yobs.s,1,mean,na.rm=T)
     # 4 breaks by default: small, moderate, high, extremes precipitation
     q.mean.s = quantile(mean.s, probs=prob.class)
@@ -1674,7 +1800,7 @@ disag.3D.to.1D = function(Yobs, # matrix of observed intensities at 24h: (nTobs*
     classObs[iObs.s] = class.s
     # simulated class
     iSim.s = mSimAgg==i.s
-    Ysim.s = YSimAgg[iSim.s,]
+    Ysim.s = YSimAgg[iSim.s,,drop=FALSE]
     mean.s = apply(Ysim.s,1,mean,na.rm=T)
     class.s = cut(mean.s, breaks=c(0,q.mean.s,max(mean.s)), labels = FALSE, include.lowest = T)
     classSim[iSim.s] = class.s
@@ -1745,7 +1871,11 @@ sim.GWex.occ = function(objGwexFit,vecMonth){
     }
     
     # generate multivariate gaussian
-    rndNorm[t,] = MASS::mvrnorm(1,rep(0,p),parOcc$list.mat.omega[[iMonth.t]]$mat.omega)
+    if(p==1){
+      rndNorm[t,] = stats::rnorm(n=1)
+    }else{
+      rndNorm[t,] = MASS::mvrnorm(1,rep(0,p),parOcc$list.mat.omega[[iMonth.t]]$mat.omega)
+    }
   }
   
   
@@ -1774,8 +1904,15 @@ sim.GWex.occ = function(objGwexFit,vecMonth){
 #'
 #' @author Guillaume Evin
 sim.GWex.Yt.Pr.get.param = function(objGwexFit,iM){
-  # extract relevant parameters
-  fitParCorIntclass = objGwexFit@fit$listPar$parInt$cor.int[[iM]]
+  cor.int = objGwexFit@fit$listPar$parInt$cor.int
+  
+  # test if it contains estimated parameters (not the case if p=1 and MAR=FALSE)
+  if(length(cor.int)==0){
+    fitParCorIntclass = NULL
+  }else{
+    # extract relevant parameters
+    fitParCorIntclass = objGwexFit@fit$listPar$parInt$cor.int[[iM]]
+  }
   
   # return results
   return(fitParCorIntclass)
@@ -1869,7 +2006,11 @@ sim.GWex.Yt.Pr = function(objGwexFit,vecMonth){
   
   # retrieve period and parameters
   PAR = sim.GWex.Yt.Pr.get.param(objGwexFit,vecMonth[1])
-  Yt.Gau[1,] = sim.Zt.Spatial(PAR,copulaInt,p)
+  if(p==1){
+    Yt.Gau[1,] = stats::rnorm(n=1)
+  }else{
+    Yt.Gau[1,] = sim.Zt.Spatial(PAR,copulaInt,p)
+  }
   
   #_____________ t=2...n _____________
   for(t in 2:n){
@@ -1879,7 +2020,13 @@ sim.GWex.Yt.Pr = function(objGwexFit,vecMonth){
     }
     
     if(isMAR){
-      Yt.Gau[t,] = sim.Zt.MAR(PAR,copulaInt,Yt.Gau[t-1,],p)
+      if(p==1){
+        # simple AR(1) process Y(t) = A*Y(t-1) + e where e follows a N(0,sdZ)
+        Yt.Gau[t,] = Yt.Gau[t-1,]*PAR[['A']] + stats::rnorm(n=1,mean = 0,sd = PAR[['sdZ']])
+      }else{
+        # multivariate-AR(1) process
+        Yt.Gau[t,] = sim.Zt.MAR(PAR,copulaInt,Yt.Gau[t-1,],p)
+      }
       
       # Issue with the MAR(1) process: instability of the autoregressive process if A is nearly non-inversible
       # during the simulation process, Z values can become very large (>10)and leads to prob=1, and non-possible invers transform
@@ -1888,7 +2035,11 @@ sim.GWex.Yt.Pr = function(objGwexFit,vecMonth){
         print(paste0('fail: t=',t))
       }
     }else{
-      Yt.Gau[t,] = sim.Zt.Spatial(PAR,copulaInt,p)
+      if(p==1){
+        Yt.Gau[t,] = stats::rnorm(n=1)
+      }else{
+        Yt.Gau[t,] = sim.Zt.Spatial(PAR,copulaInt,p)
+      }
     }
   }
   
@@ -1929,14 +2080,16 @@ sim.GWex.Yt = function(objGwexFit,vecMonth,Yt.Pr){
     isClass = (vecMonth == iM)
     nClass = sum(isClass)
     
-    # pour chaque station
-    for(st in 1:p){
-      # days for this period as matrix indices
-      i.mat = cbind(which(isClass),rep(st,nClass))
-      # intensities
-      pI = parMargin[[iM]][st,]
-      # inverse-cdf
-      Yt[i.mat] = unif.to.prec(pI,objGwexFit@fit$listOption$typeMargin,Yt.Pr[i.mat])
+    if(nClass>0){
+      # pour chaque station
+      for(st in 1:p){
+        # days for this period as matrix indices
+        i.mat = cbind(which(isClass),rep(st,nClass))
+        # intensities
+        pI = parMargin[[iM]][st,]
+        # inverse-cdf
+        Yt[i.mat] = unif.to.prec(pI,objGwexFit@fit$listOption$typeMargin,Yt.Pr[i.mat])
+      }
     }
   }
   
@@ -2044,7 +2197,8 @@ sim.GWex.prec.1it = function(objGwexFit,vecDates,myseed,objGwexObs,prob.class){
     dateObsAgg = objGwexObs@date[seq(from=1,length.out=nObsAgg,by=dayScale)]
     mObsAgg = month2season(as.numeric(format(dateObsAgg,'%m')))
     #### disagregate 3-day int. Yt into daily intensities
-    Pt = disag.3D.to.1D(obs[1:(nObsAgg*3),],obsAgg,mObsAgg,simAgg,mSimAgg,prob.class)$Ysim[1:n.orig,]
+    Pt = disag.3D.to.1D(obs[1:(nObsAgg*3),,drop=FALSE],obsAgg,mObsAgg,simAgg,
+                        mSimAgg,prob.class)$Ysim[1:n.orig,]
   }else{
     # mask with the occurrences Xt
     Pt = mask.GWex.Yt(Xt,Yt)
@@ -2075,7 +2229,7 @@ fit.margin.cdf = function(P.mat,isPeriod,th,type=c('EGPD','mixExp')){
   isClass = isPeriod
   
   # filtered matrix of precipitation for this period (3-mon moving window by dafault)
-  P.mat.class = P.mat[isClass,]
+  P.mat.class = P.mat[isClass,,drop=FALSE]
   
   # prepare output
   list.out = matrix(nrow=p,ncol=3)
@@ -2083,7 +2237,7 @@ fit.margin.cdf = function(P.mat,isPeriod,th,type=c('EGPD','mixExp')){
   if(type == 'EGPD'){
     #  Applies Extented GPD
     for(i.st in 1:p){
-      P.st = P.mat.class[,i.st]
+      P.st = P.mat.class[,i.st,drop=FALSE]
       is.Prec = P.st>th&!is.na(P.st)
       P.nz = P.st[is.Prec]
       list.out[i.st,] = EGPD.GI.fit.PWM(P.nz)$x
@@ -2091,7 +2245,7 @@ fit.margin.cdf = function(P.mat,isPeriod,th,type=c('EGPD','mixExp')){
   }else if(type == 'mixExp'){
     #  Applies mixture of exponentials
     for(i.st in 1:p){
-      P.st = P.mat.class[,i.st]
+      P.st = P.mat.class[,i.st,drop=FALSE]
       is.Prec = P.st>th&!is.na(P.st)
       P.nz = P.st[is.Prec]
       list.out[i.st,] = Renext::EM.mixexp(P.nz)$estimate[c(1,3,4)]

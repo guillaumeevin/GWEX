@@ -1,5 +1,3 @@
-! compile with the command "R CMD SHLIB GWex_disag.f90" in a command prompt
-
 !=========================== indexx ==========================
 ! Use the Heapsort algorithm to index an array arrin of length n.
 ! Output the array indx such that arrin(indx(j)) is in ascending
@@ -120,7 +118,7 @@ subroutine disag3DayGWexPrec_F(Yobs, Y3obs, mObs, cObs, Y3sim, mSim, cSim, nTobs
 
     !  Locals
     integer :: nBestField,i,j,k,iDay,jDay,j3Day,iLag
-    double precision :: naVal,rmseIJ, r
+    double precision :: naVal,rmseIJ
     PARAMETER(nBestField=10,naVal=-9999.)
     double precision :: adimObs(nStat), adimSim(nStat)
     double precision, dimension(3) :: Yobs3D
@@ -299,11 +297,10 @@ subroutine disag3DayGWexPrec_F(Yobs, Y3obs, mObs, cObs, Y3sim, mSim, cSim, nTobs
                    enddo
                end if
 
-            ! pick one of 10 days with similar occ structures and intensities at this station
+            ! pick one of 10 days with similar occ structures and intensities at this station. EDIT Sep 2023: We pick the best one because RANDOM_NUMBER is not accepted on CRAN
             call indexx(rmseI,nTobs,indBestrmseDayI)
             codeDisag(i,k) = 2000
-            call RANDOM_NUMBER(r)
-            j3Day = indBestrmseDayI(int(r*10)+1)
+            j3Day = indBestrmseDayI(1)
             jDay = (j3Day-1)*3
             Yobs3D = Yobs((jDay+1):(jDay+3),k)
             Ysim((iDay+1):(iDay+3),k) = Yobs3D*Y3sim(i,k)/sum(Yobs3D)
