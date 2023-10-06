@@ -1255,7 +1255,7 @@ infer.autocor.amount = function(P.mat,pr.state,isPeriod,nLag,th,parMargin,typeMa
     # on the contrary to GWEX, here I consider all days of the class (where there might
     # not be many elements) and the corr. previous days in order to increase the possible
     # days (instead of consider only days which have also previous days within the same class)
-    ar1.obs = cor(P.st[indClassPrev],P.st[indClassCur],use="pairwise.complete.obs")
+    ar1.obs = cor(P.mat[indClassPrev],P.mat[indClassCur],use="pairwise.complete.obs")
     
     # retrieve some objects and simulations that are done in get.M0 and infer.mat.omega
     
