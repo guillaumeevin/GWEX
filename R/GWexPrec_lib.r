@@ -79,13 +79,14 @@ lag.trans.proba.vector.byClass = function(vec.prec, # vector nx1 of precipitatio
   
   # length of input vectors
   nVec = length(vec.prec)
+
+  # make nan days that are not in the concerned period 
+  vec.prec[!isPeriod] = NA
   
   # filter dates where we have the previous nlag days & concerned by this class
   # NOTE: we consider that only the current day should be concerned by the class,
   # not the previous days (too restrictive)
-  filter.first.days = 1:nVec>nlag
-  isClass = isPeriod
-  ind.isClass = which(isClass&filter.first.days)
+  ind.isClass = which(isPeriod)
   
   # is.wet.lag gives the boolean values indicating if the time step 0, 1, ... ,0+nlag
   # are wet or not
