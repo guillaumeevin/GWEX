@@ -15,7 +15,7 @@ infer.mat.omega(P.mat, isPeriod, th, nLag, pr.state, nChainFit, isParallel)
 
 \item{nLag}{order of the Markov chain}
 
-\item{pr.state}{output of function \code{\link{lag.trans.proba.mat.byClass}}}
+\item{pr.state}{output of function \code{\link{lagTransProbaMatrix}}}
 
 \item{nChainFit}{length of the simulated chains used during the fitting}
 

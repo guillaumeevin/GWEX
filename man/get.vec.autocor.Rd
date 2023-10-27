@@ -11,7 +11,7 @@ get.vec.autocor(vec.ar1.obs, Xt, parMargin, typeMargin, nChainFit, isParallel)
 
 \item{Xt}{simulated occurrences given model parameters of wet/dry states}
 
-\item{parMargin}{parameters of the margins 2 x 3}
+\item{parMargin}{parameters of the margins p x 3}
 
 \item{typeMargin}{type of marginal distribution: 'EGPD' or 'mixExp'}
 

@@ -40,35 +40,35 @@ Simulate from a GWex model
 }
 \examples{
 # vector of dates
-vecDates = seq(from=as.Date("01/01/2005",format="\%d/\%m/\%Y"),
-to=as.Date("31/12/2014",format="\%d/\%m/\%Y"),by='day')
+# vecDates = seq(from=as.Date("01/01/2005",format="\%d/\%m/\%Y"),
+# to=as.Date("31/12/2014",format="\%d/\%m/\%Y"),by='day')
 
 ###############################################################
 #               FIT AND SIMULATE FROM THE PRECIPITATION MODEL
 ###############################################################
 # Format observations: create a G-Wex object
-myObsPrec = GwexObs(variable='Prec',date=vecDates,obs=dailyPrecipGWEX[,1:2])
+# myObsPrec = GwexObs(variable='Prec',date=vecDates,obs=dailyPrecipGWEX[,1:2])
 
 # default options except for 'nChainFit'
-list.options = list(nChainFit=1000)
+# list.options = list(nChainFit=1000)
 
 # generate 2 scenarios for one year, using an existing 'GwexFit' object
-myParPrec = fitGwexModel(myObsPrec) # fit model
-mySimPrec = simGwexModel(objGwexFit=myParPrec, nb.rep=2, d.start=vecDates[1],
-d.end=vecDates[10],objGwexObs=myObsPrec)
-mySimPrec # print object
+# myParPrec = fitGwexModel(myObsPrec) # fit model
+# mySimPrec = simGwexModel(objGwexFit=myParPrec, nb.rep=2, d.start=vecDates[1],
+# d.end=vecDates[10],objGwexObs=myObsPrec)
+# mySimPrec # print object
 
 ###############################################################
 #     FIT AND SIMULATE FROM THE TEMPERATURE MODEL
 ###############################################################
 # Format observations: create a G-Wex object
-myObsTemp = GwexObs(variable='Temp',date=vecDates,obs=dailyTemperGWEX)
-myParTemp = fitGwexModel(myObsTemp,listOption=list(hasTrend=TRUE,typeMargin='Gaussian',
-depStation='Gaussian'))
+# myObsTemp = GwexObs(variable='Temp',date=vecDates,obs=dailyTemperGWEX)
+# myParTemp = fitGwexModel(myObsTemp,listOption=list(hasTrend=TRUE,typeMargin='Gaussian',
+# depStation='Gaussian'))
 # generate 2 scenarios for one year, using an existing 'GwexFit' object
-mySimTemp = simGwexModel(objGwexFit=myParTemp, nb.rep=2, d.start=vecDates[1], 
-                         d.end=vecDates[365],objGwexObs=myObsPrec)
-mySimTemp # print object
+# mySimTemp = simGwexModel(objGwexFit=myParTemp, nb.rep=2, d.start=vecDates[1], 
+#                          d.end=vecDates[365],objGwexObs=myObsPrec)
+# mySimTemp # print object
 }
 \author{
 Guillaume Evin

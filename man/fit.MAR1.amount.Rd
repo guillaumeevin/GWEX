@@ -15,14 +15,14 @@ fit.MAR1.amount(P.mat, isPeriod, th, copulaInt, M0, A)
 
 \item{copulaInt}{type of dependance between inter-site amounts: 'Gaussian' or 'Student'}
 
-\item{M0}{Matrix containing the inter-site spatial correlations}
+\item{M0}{covariance matrix of gaussianized prec. amounts for all pairs of stations}
 
 \item{A}{Matrix containing the autocorrelation (temporal) correlations}
 }
 \value{
 list with the following items
 \itemize{
-  \item \strong{M0}{omega correlations for all pairs of stations}
+  \item \strong{M0}{covariance matrix of gaussianized prec. amounts for all pairs of stations}
   \item \strong{A}{omega correlations for all pairs of stations}
   \item \strong{covZ}{covariance matrix of the MAR(1) process}
   \item \strong{sdZ}{standard deviation of the diagonal elements}

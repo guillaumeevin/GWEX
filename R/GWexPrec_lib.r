@@ -1,6 +1,6 @@
 ###===============================###===============================###
 ### Guillaume Evin
-### 02/12/2022, Grenoble
+### 23/10/2023, Grenoble
 ###  INRAE-UR ETNA
 ### guillaume.evin@inrae.fr
 ###
@@ -16,6 +16,127 @@
 ###===============================###===============================###
 
 #==============================================================================
+#' getGwexFitPrec
+#'
+#' get object GwexFit derived from the parameters replicated for each month
+#'
+#' @param listOption list of options (see \code{\link{fitGwexModel}})
+#' @param p number of stations
+#' @param condProbaWDstates vector of length nLag^2 of transition probabilities
+#' corresponding to the nlag possible transitions between dry/wet states
+#' \code{expand.grid(lapply(numeric(nLag), function(x) c(F,T)))}
+#' @param parMargin parameters of the margins: vector of length 3
+#' @param vec.ar1 vector of observed autocorrelations for all stations
+#' @param M0  \strong{M0}: covariance matrix of gaussianized prec. amounts for all pairs of stations
+#' @param mat.omega \strong{mat.omega}: The spatial correlation matrix of occurrences \eqn{\Omega}
+#'
+#' @export
+#'
+#' @return Return an object of class \code{\linkS4class{GwexFit}} with:
+#' \itemize{
+#'   \item \strong{p}: The number of station,
+#'   \item \strong{version}: package version,
+#'   \item \strong{variable}: the type of variable,
+#'   \item \strong{fit}: a list containing the list of options \code{listOption}
+#'    and the list of estimated parameters \code{listPar}.
+#' }
+#'
+#' @examples
+#' exFitGwexPrec = getGwexFitPrec(p=2,condProbaWDstates=c(0.7,0.3,0.2,0.1),
+#' parMargin=c(0.5,0.1,0.4),vec.ar1=rep(0.7,2),M0=rbind(c(1,0.6),c(0.6,1)),
+#' mat.omega=rbind(c(1,0.8),c(0.8,1)))
+getGwexFitPrec = function(listOption=NULL,p,condProbaWDstates,parMargin,
+                          vec.ar1=NULL,M0=NULL,mat.omega=NULL){
+  # process options
+  listOption = get.listOption(listOption)
+  
+  # number of days for wet/dry transitions
+  nLag = listOption$nLag
+  
+  # list.pr.state
+  if(length(condProbaWDstates)!=(nLag^2)){
+    stop("condProbaWDstates: wrong length for condProbaWDstates, it should be nLag^2")
+  }
+  pr.state = expand.grid(lapply(numeric(nLag), function(x) c(F,T)))
+  names(pr.state) = paste0('t',(-nLag:-1))
+  pr.state$P = condProbaWDstates
+  list.pr.state.m = list()
+  for(ip in 1:p){
+    list.pr.state.m[[ip]] = pr.state
+  }
+  
+  # mat.omega
+  if(p>1){
+    if(is.null(mat.omega)){
+      mat.omega = diag(rep(1,p))
+    }else{
+      if(ncol(mat.omega)!=p | nrow(mat.omega)!=p ){
+        stop("getGwexFitPrec: wrong dimensions for mat.omega")
+      }
+    }
+    
+    n.comb = 2^nLag
+    mat.comb = as.matrix(pr.state[,1:nLag])
+    Ptrans.list = lapply(list.pr.state.m,'[',nLag+1)
+    Qtrans.list = lapply(Ptrans.list,function(x) qnorm(unlist(x)))
+    Qtrans.mat = matrix(unlist(Qtrans.list), ncol=n.comb, byrow=T)
+    mat.omega = modify.cor.matrix(mat.omega)
+    mat.omega.m = list(Qtrans.mat=Qtrans.mat,mat.comb=mat.comb,mat.omega=mat.omega)
+  }else{
+    mat.omega.m = NULL
+  }
+  
+  
+  # parMargin
+  if(length(parMargin)!=3){
+    stop("getGwexFitPrec: wrong length for parMargin, it should be a vector of length 3")
+  }
+  parMargin.m = t(replicate(p,parMargin))
+  
+  # par.dep.amount
+  if(!is.null(M0)){
+    if(length(vec.ar1)!=p){
+      stop("getGwexFitPrec: wrong length for vec.ar1, it should be a vector of length p")
+    }
+  }else{
+    vec.ar1=rep(0,p)
+  }
+  A=diag(vec.ar1)
+  
+  if(p>1){
+    if(is.null(M0)){
+      M0 = diag(rep(1,p))
+    }else{
+      if(ncol(M0)!=p | nrow(M0)!=p ){
+        stop("getGwexFitPrec: wrong dimensions for M0")
+      }
+    }
+    
+    covZ = M0 - A%*%t(M0)%*%t(A)
+    sdZ = sqrt(diag(covZ))
+    corZ = modify.cor.matrix(cov2cor(covZ))
+    list.par.dep.amount.m = list(M0=M0,A=A,covZ=covZ,sdZ=sdZ,corZ=corZ)
+  }else{
+    list.par.dep.amount.m = NULL
+  }
+  
+  # repeat the same list of parameters for each month
+  list.pr.state = list.mat.omega = list.par.dep.amount = list.parMargin = list()
+  for(im in 1:12){
+    list.pr.state[[im]] = list.pr.state.m
+    list.mat.omega[[im]] = mat.omega.m
+    list.par.dep.amount[[im]] = list.par.dep.amount.m
+    list.parMargin[[im]] = parMargin.m
+  }
+  listPar = list(parOcc=list(list.pr.state=list.pr.state,list.mat.omega=list.mat.omega),
+                 parInt=list(cor.int=list.par.dep.amount,parMargin=list.parMargin),
+                 p=p)
+  
+  return(new("GwexFit",variable="Prec",fit = list(listOption=listOption,listPar=listPar),p=p))
+}
+
+
+#==============================================================================
 #' dry.day.frequency
 #'
 #' Estimate the dry day frequency (proportion of dry days) for all stations
@@ -23,6 +144,8 @@
 #' @param mat.prec matrix of precipitation (possibly for one month/period)
 #' @param th threshold above which we consider that a day is wet (e.g. 0.2 mm)
 #'
+#' @export
+#' 
 #' @return \item{vector of numeric}{dry day frequencies}
 #'
 #' @author Guillaume Evin
@@ -42,6 +165,8 @@ dry.day.frequency = function(mat.prec, # matrix of precipitation
 #' @param mat.prec matrix of precipitation (possibly for one month/period)
 #' @param th threshold above which we consider that a day is wet (e.g. 0.2 mm)
 #'
+#' @export
+#' 
 #' @return \item{vector of numeric}{wet day frequencies}
 #'
 #' @author Guillaume Evin
@@ -53,26 +178,26 @@ wet.day.frequency = function(mat.prec, # matrix of precipitation
 }
 
 #==============================================================================
-#' lag.trans.proba.vector.byClass
+#' lagTransProbaVector
 #'
 #' Estimate the transition probabilities between wet and dry states, for nlag previous days,
 #' for one station
+#' 
+#' @export
 #'
 #' @param vec.prec vector nx1 of precipitation for one station
 #' @param isPeriod vector of logical n x 1 indicating the days concerned by a 3-month period
 #' @param th threshold above which we consider that a day is wet (e.g. 0.2 mm)
 #' @param nlag number of lag days
-#' @param dayScale time resolution
-#'
+#' 
 #' @return \item{matrix}{matrix nLag^2 x (nLag+1) of transition probability between dry/wet state.
 #'  The first nLag columns indicate the wet/dry states for the previous nLag days}
 #'
 #' @author Guillaume Evin
-lag.trans.proba.vector.byClass = function(vec.prec, # vector nx1 of precipitation for one station
-                                          isPeriod, # vector nx1 of logical
-                                          th, # threshold
-                                          nlag, # number of lag days
-                                          dayScale # time resolution
+lagTransProbaVector = function(vec.prec, # vector nx1 of precipitation for one station
+                               isPeriod, # vector nx1 of logical
+                               th, # threshold
+                               nlag # number of lag days
 ){
   # number lags + 1 
   ndays = nlag+1
@@ -80,21 +205,19 @@ lag.trans.proba.vector.byClass = function(vec.prec, # vector nx1 of precipitatio
   # length of input vectors
   nVec = length(vec.prec)
   
-  # filter dates where we have the previous nlag days & concerned by this class
+  # dates concerned by this class
   # NOTE: we consider that only the current day should be concerned by the class,
-  # not the previous days (too restrictive)
-  filter.first.days = 1:nVec>nlag
-  isClass = isPeriod
-  ind.isClass = which(isClass&filter.first.days)
+  # not the next days (too restrictive)
+  ind.isPeriod = which(isPeriod)
   
-  # is.wet.lag gives the boolean values indicating if the time step 0, 1, ... ,0+nlag
+  # iswetlag gives the boolean values indicating if the time step 0, 1, ... ,0+nlag
   # are wet or not
-  is.wet.lag = matrix(nrow=length(ind.isClass),ncol=ndays)
-  for(i.lag in 0:nlag) is.wet.lag[,(i.lag+1)] = vec.prec[ind.isClass+i.lag]>th
+  iswetlag = matrix(nrow=length(ind.isPeriod),ncol=ndays)
+  for(ilag in 0:nlag) iswetlag[,(ilag+1)] = vec.prec[ind.isPeriod+ilag]>th
   
   # no nan
-  nz = apply(is.wet.lag,1,function(x) !any(is.na(x)))
-  x.nz = is.wet.lag[nz,]
+  nz = apply(iswetlag,1,function(x) !any(is.na(x)))
+  x.nz = iswetlag[nz,]
   
   # matrix of joints probabilities
   comb.pr = expand.grid(lapply(numeric(ndays), function(x) c(F,T)))
@@ -122,30 +245,30 @@ lag.trans.proba.vector.byClass = function(vec.prec, # vector nx1 of precipitatio
 
 
 #==============================================================================
-#' lag.trans.proba.mat.byClass
+#' lagTransProbaMatrix
 #'
-#' Estimate the transition probabilites between wet and dry states, for nlag previous days,
+#' Estimate the transition probabilities between wet and dry states, for nlag previous days,
 #' for all stations
 #'
 #' @param mat.prec matrix of precipitation
 #' @param isPeriod vector of logical n x 1 indicating the days concerned by a 3-month period
 #' @param th threshold above which we consider that a day is wet (e.g. 0.2 mm)
 #' @param nlag number of lag days
-#' @param dayScale time resolution
-#'
+#' 
+#' @export
+#' 
 #' @return \item{list}{list with one item per station, where each item is a
 #' matrix nLag^2 x (nLag+1) of transition probability between dry/wet state.
 #'  The first nLag columns indicate the wet/dry states for the previous nLag days}
 #'
 #' @author Guillaume Evin
-lag.trans.proba.mat.byClass = function(mat.prec, # matrix of precipitation
-                                       isPeriod, # vector of logical
-                                       th, # threshold above which we consider that a day is wet
-                                       nlag, # number of lag days
-                                       dayScale # time resolution
+lagTransProbaMatrix = function(mat.prec, # matrix of precipitation
+                               isPeriod, # vector of logical
+                               th, # threshold above which we consider that a day is wet
+                               nlag # number of lag days
 ){
   # lag.trans.proba.proba (computeStat_lib)
-  return(apply(mat.prec,2,lag.trans.proba.vector.byClass,isPeriod,th,nlag,dayScale))
+  return(apply(mat.prec,2,lagTransProbaVector,isPeriod,th,nlag))
 }
 
 
@@ -507,6 +630,8 @@ agg.matrix = function(mat,k,average=F){
 #'
 #' @param listOption list containing fields corr. to the different options. Can be NULL if no options are set
 #'
+#' @export
+#' 
 #' @return \item{listOption}{list of options}
 #'
 #' @author Guillaume Evin
@@ -545,7 +670,7 @@ get.listOption = function(listOption){
     typeMargin = listOption[['typeMargin']]
     if(!(typeMargin %in% c('mixExp','EGPD'))) stop('typeMargin ust be equal to mixExp or EGPD')
   }else{
-    typeMargin = 'EGPD'
+    typeMargin = 'mixExp'
     listOption[['typeMargin']] = typeMargin
   }
   
@@ -554,7 +679,7 @@ get.listOption = function(listOption){
     copulaInt = listOption[['copulaInt']]
     if(!copulaInt%in%c('Gaussian','Student')) stop('copulaInt must be equal to Gaussian or Student')
   }else{
-    copulaInt = 'Student'
+    copulaInt = 'Gaussian'
     listOption[['copulaInt']] = copulaInt
   }
   
@@ -563,7 +688,7 @@ get.listOption = function(listOption){
     isMAR = listOption[['isMAR']]
     if(!is.logical(isMAR)) stop('isMAR must be logical')
   }else{
-    isMAR = T
+    isMAR = FALSE
     listOption[['isMAR']] = isMAR
   }
   
@@ -572,7 +697,7 @@ get.listOption = function(listOption){
     is3Damount = listOption[['is3Damount']]
     if(!is.logical(is3Damount)) stop('is3Damount must be logical')
   }else{
-    is3Damount = F
+    is3Damount = FALSE
     listOption[['is3Damount']] = is3Damount
   }
   
@@ -611,10 +736,12 @@ get.listOption = function(listOption){
 #' @param isPeriod vector of logical n x 1 indicating the days concerned by a 3-month period
 #' @param th threshold above which we consider that a day is wet (e.g. 0.2 mm)
 #' @param nLag order of the Markov chain
-#' @param pr.state output of function \code{\link{lag.trans.proba.mat.byClass}}
+#' @param pr.state output of function \code{\link{lagTransProbaMatrix}}
 #' @param nChainFit length of the simulated chains used during the fitting
 #' @param isParallel logical: indicate computation in parallel or not (easier for debugging)
 #'
+#' @export
+#' 
 #' @return A list with different objects 
 #' \itemize{
 #'   \item \strong{Qtrans.mat}: matrix nStation x n.comb of transition probabilites
@@ -624,11 +751,8 @@ get.listOption = function(listOption){
 #'
 #' @author Guillaume Evin
 infer.mat.omega = function(P.mat,isPeriod,th,nLag,pr.state,nChainFit,isParallel){
-  # class = Period
-  isClass = isPeriod
-  
   # filtered matrix of precipitation for this period (3-mon moving window by dafault)
-  P.mat.class = P.mat[isClass,]
+  P.mat.class = P.mat[isPeriod,]
   
   # observed correlation of dry/wet states (see Eq. 6 in Evin et al. 2018)
   pi0 = dry.day.frequency(P.mat.class,th)
@@ -683,6 +807,8 @@ infer.mat.omega = function(P.mat,isPeriod,th,nLag,pr.state,nChainFit,isParallel)
 #' @param nChainFit length of the simulated chains used during the fitting
 #' @param isParallel logical: indicate computation in parallel or not (easier for debugging)
 #'
+#' @export
+#' 
 #' @return \item{matrix}{omega correlations for all pairs of stations}
 #'
 #' @author Guillaume Evin
@@ -740,6 +866,8 @@ get.mat.omega = function(cor.obs,Qtrans.mat,mat.comb,nLag,nChainFit,isParallel){
 #' @param nLag order of the Markov chain
 #' @param nChainFit length of the simulated chains used during the fitting
 #'
+#' @export
+#' 
 #' @return \item{scalar}{needed correlation}
 #'
 #' @author Guillaume Evin
@@ -784,8 +912,9 @@ find.omega = function(rho.emp,Qtrans.mat,mat.comb,nLag,nChainFit){
 #'
 #' Finds observed correlations between occurrences corresponding
 #' to a degree of correlation of Gaussian multivariate random numbers
+#'
 #' @useDynLib GWEX, .registration = TRUE
-#' @noRd
+#' 
 #' @param w correlation of Gaussian multivariates
 #' @param Qtrans.mat transition probabilities, 2 x ncomb matrix
 #' @param mat.comb matrix of logical: ncomb x nlag
@@ -793,6 +922,8 @@ find.omega = function(rho.emp,Qtrans.mat,mat.comb,nLag,nChainFit){
 #' @param nChainFit number of simulated variates
 #' @param myseed seed of random variates
 #'
+#' @export
+#' 
 #' @return \item{scalar}{correlation between occurrences}
 #'
 #' @author Guillaume Evin
@@ -802,14 +933,10 @@ cor.emp.occ = function(w,Qtrans.mat,mat.comb,nLag,nChainFit,myseed=1){
   
   # genere gaussienne multivariee
   w.mat = rbind(c(1,w),c(w,1))
-  rndNorm = MASS::mvrnorm(nChainFit,rep(0,2),w.mat)
+  rndNorm = MASS::mvrnorm(nChainFit+100,rep(0,2),w.mat)
   
-  # empirical correlation with the Markov process
-  matComb.f = mat.comb*1
-  storage.mode(matComb.f) <- "integer"
-  
-  cor.emp = .Fortran("corMarkovChain", rndNorm=rndNorm, QtransMat=Qtrans.mat, PACKAGE="GWEX",
-                     matComb=matComb.f, n=as.integer(nChainFit), nLag=as.integer(nLag), r=double(1))$r
+  cor.emp = corMarkovChain(rndNorm=rndNorm,QtransMat=Qtrans.mat, matcomb=mat.comb, 
+                           nChainFit=as.integer(nChainFit), nLag=as.integer(nLag))
   
   # correlations occurrences
   return(cor.emp)
@@ -817,22 +944,65 @@ cor.emp.occ = function(w,Qtrans.mat,mat.comb,nLag,nChainFit,myseed=1){
 
 
 #==============================================================================
+#' simPrecipOcc
+#'
+#' find matrix of correlations leading to estimates cor between intensities
+#'
+#' @useDynLib GWEX, .registration = TRUE
+#' 
+#' @param nLag order of the Markov chain
+#' @param n  integer indicating the length of simulated chains
+#' @param pr vector of probabilies corr. to the conditional transition probabilities
+#' 
+#' @export
+#' 
+#' @return a vector Xt of length n with values 0/1 corr. to dry/wet states
+#'
+#' @author Guillaume Evin
+simPrecipOcc = function(nLag,n,pr){
+  
+  # sequence of previous wet/dry states
+  lcomb = expand.grid(lapply(numeric(nLag), function(x) c(F,T)))
+  matcomb = as.matrix(apply(lcomb,2,as.numeric))
+  
+  # gaussian random variates 
+  rndNorm = rnorm(n = n+1000)
+  
+  # gaussian quantiles corr. to pr
+  if(length(pr)!=(2^nLag)){
+    stop(paste0("wrong length for pr, it should be:",2^nLag))
+  }else{
+    Qtrans_vec = qnorm(pr)
+  }
+  
+  # simulate chain
+  Xt = simPrecipOccurrences4Fitting(nLag=nLag, nChainFit=n, matcomb=matcomb, 
+                                    Qtrans_vec=Qtrans_vec, rndNorm=rndNorm)
+  
+  return(Xt)
+}
+
+#==============================================================================
 #' get.M0
 #'
 #' find matrix of correlations leading to estimates cor between intensities
 #'
+#' @useDynLib GWEX, .registration = TRUE
+#'
 #' @param cor.obs matrix p x p of observed correlations between intensities for all pairs of stations
 #' @param infer.mat.omega.out output of \code{\link{infer.mat.omega}}
 #' @param nLag order of the Markov chain
-#' @param parMargin parameters of the margins 2 x 3
+#' @param parMargin parameters of the margins p x 3
 #' @param typeMargin type of marginal distribution: 'EGPD' or 'mixExp'
 #' @param nChainFit integer indicating the length of simulated chains
 #' @param isParallel logical: indicate computation in parallel or not (easier for debugging)
 #' 
+#' @export
+#' 
 #' @return list with two items
 #' \itemize{
 #'   \item \strong{Xt}{long simulation of the wet/dry states according to the model}
-#'   \item \strong{M0}{omega correlations for all pairs of stations}
+#'   \item \strong{M0}{covariance matrix of gaussianized prec. amounts for all pairs of stations}
 #' }
 #'
 #' @author Guillaume Evin
@@ -846,20 +1016,16 @@ get.M0 = function(cor.obs,infer.mat.omega.out,nLag,parMargin,typeMargin,nChainFi
   # number of stations
   p = ncol(cor.obs)
   
-  # number of combinations
-  n.comb = ncol(Qtrans.mat)
+  # simulate random gaussian variates
+  rndNorm = MASS::mvrnorm(nChainFit+1000,rep(0,p),mat.omega)
   
   # simulate occurrence (once only)
-  Qtrans = QtransMat2Array(nChainFit,p,Qtrans.mat)
-  Xt = array(0,dim=c(nChainFit,p))
-  rndNorm = MASS::mvrnorm(nChainFit,rep(0,p),mat.omega)
-  for(t in (nLag+1):nChainFit){
-    for(st in 1:p){
-      comb = Xt[(t-nLag):(t-1),st]==1
-      i.comb = which(apply(mat.comb, 1, function(x) all(x==comb)))
-      qTr = Qtrans[t,st,i.comb]
-      Xt[t,st] = (rndNorm[t,st]<=qTr)
-    }
+  Xt = matrix(data = 0,nrow = nChainFit,ncol = p)
+  matcomb = matrix(as.numeric(mat.comb),ncol=nLag)
+  for(st in 1:p){
+    Qtrans_vec=as.vector(Qtrans.mat[st,])
+    Xt[,st] = simPrecipOccurrences4Fitting(nLag=nLag, nChainFit=nChainFit, matcomb=matcomb, 
+                                           Qtrans_vec=Qtrans_vec, rndNorm=rndNorm[,st])
   }
   
   # possible pairs
@@ -909,6 +1075,8 @@ get.M0 = function(cor.obs,infer.mat.omega.out,nLag,parMargin,typeMargin,nChainFi
 #' @param parMargin parameters of the margins 2 x 3
 #' @param typeMargin type of marginal distribution: 'EGPD' or 'mixExp'
 #'
+#' @export
+#' 
 #' @return \item{scalar}{needed correlation}
 #'
 #' @author Guillaume Evin
@@ -959,6 +1127,8 @@ find.zeta = function(eta.emp,nChainFit,Xt,parMargin,typeMargin){
 #' @param parMargin parameters of the margins 2 x 3
 #' @param typeMargin type of marginal distribution: 'EGPD' or 'mixExp'
 #'
+#' @export
+#' 
 #' @return \item{scalar}{correlation between simulated intensities}
 #'
 #' @author Guillaume Evin
@@ -986,11 +1156,13 @@ cor.emp.int = function(zeta,nChainFit,Xt,parMargin,typeMargin){
 #'
 #' @param vec.ar1.obs vector of observed autocorrelations for all stations
 #' @param Xt simulated occurrences given model parameters of wet/dry states
-#' @param parMargin parameters of the margins 2 x 3
+#' @param parMargin parameters of the margins p x 3
 #' @param typeMargin type of marginal distribution: 'EGPD' or 'mixExp'
 #' @param nChainFit integer indicating the length of the simulated chains
 #' @param isParallel logical: indicate computation in parallel or not (easier for debugging)
 #'
+#' @export
+#' 
 #' @return \item{vector}{vector of rho parameters to simulate the MAR process}
 #'
 #' @author Guillaume Evin
@@ -1026,6 +1198,8 @@ get.vec.autocor = function(vec.ar1.obs,Xt,parMargin,typeMargin,nChainFit,isParal
 #' @param parMargin parameters of the margins 2 x 3
 #' @param typeMargin type of marginal distribution: 'EGPD' or 'mixExp'
 #'
+#' @export
+#' 
 #' @return \item{scalar}{needed correlation}
 #'
 #' @author Guillaume Evin
@@ -1057,6 +1231,8 @@ find.autocor = function(autocor.emp,nChainFit,Xt,parMargin,typeMargin){
 #' @param parMargin parameters of the margins 2 x 3
 #' @param typeMargin type of marginal distribution: 'EGPD' or 'mixExp'
 #' 
+#' @export
+#' 
 #' @return \item{scalar}{correlation between simulated intensities}
 #'
 #' @author Guillaume Evin
@@ -1065,7 +1241,7 @@ autocor.emp.int = function(rho,nChainFit,Xt,parMargin,typeMargin){
   set.seed(1)
   # Simulation from an AR(1) process
   if(rho==0){
-     Yt.AR1=rnorm(n=nChainFit)
+    Yt.AR1=rnorm(n=nChainFit)
   }else{
     Yt.AR1=stats::arima.sim(n=nChainFit,model=list(ar=rho),rand.gen=rnorm, sd=sqrt(1-rho^2))
   }
@@ -1115,6 +1291,8 @@ QtransMat2Array = function(n,p,Qtrans.mat){
 #' @param P matrix of precipitation
 #' @param th threshold above which we consider that a day is wet (e.g. 0.2 mm)
 #'
+#' @export
+#' 
 #' @return \item{list}{list of joint probabilities}
 #'
 #' @author Guillaume Evin
@@ -1134,8 +1312,8 @@ joint.proba.occ = function(P,th){
       
       if(sum(nz)==0){
         stop(paste0("fitGwexModel fails because there are too many missing values at",
-             " columns ",i," and ",j," (i.e. no simultaneous data are avaible for this",
-             "month and this couple of stations)"))
+                    " columns ",i," and ",j," (i.e. no simultaneous data are avaible for this",
+                    "month and this couple of stations)"))
       }
       
       # dry-dry
@@ -1179,6 +1357,8 @@ joint.proba.occ = function(P,th){
 #' @param pi0 probability of having a dry state
 #' @param pi1 probability of having a wet state
 #'
+#' @export
+#' 
 #' @return \item{scalar}{matrix of observed correlations}
 #'
 #' @author Guillaume Evin
@@ -1212,6 +1392,9 @@ cor.obs.occ = function(pi00,pi0,pi1){
 #' infer.autocor.amount
 #'
 #' special case of \code{\link{infer.dep.amount}} where there is only one station
+#'
+#' @useDynLib GWEX, .registration = TRUE
+#' 
 #' @param P.mat precipitation matrix
 #' @param pr.state probabilities of transitions for a Markov chain with lag \code{p}.
 #' @param isPeriod vector of logical n x 1 indicating the days concerned by a 3-month period
@@ -1223,44 +1406,42 @@ cor.obs.occ = function(pi00,pi0,pi1){
 #' @param isMAR logical value, do we apply a Autoregressive Multivariate Autoregressive model (order 1) =TRUE by default
 #' @param isParallel logical: indicate computation in parallel or not (easier for debugging)
 #' 
+#' @export
+#' 
 #' @return \item{list}{list of estimates (e.g., M0, dfStudent)}
 #'
 #' @author Guillaume Evin
 infer.autocor.amount = function(P.mat,pr.state,isPeriod,nLag,th,parMargin,typeMargin,nChainFit,
-                            isMAR,isParallel){
+                                isMAR,isParallel){
   # find remaining parameters if necessary
   if(isMAR){
-    # Class = Period
-    isClass = isPeriod
-    
     # number of stations
     p = ncol(P.mat)
     n = nrow(P.mat)
     
     # filtered data for this class: replace small values below the threshold by zero
     # for the sake of comparison with simulated values
-    P.st = P.mat[isClass,]
-    is.Zero = P.st<=th&!is.na(P.st)
-    P.st[is.Zero] = 0
+    is.Zero = P.mat<=th&!is.na(P.mat)
+    P.mat[is.Zero] = 0
     
     ### with one station, the MAR(1) simplifies to an AR(1) process
     
     # on the contrary to GWEX, here I consider all days of the class (where there might
     # not be many elements) and the corr. previous days in order to increase the possible
     # days (instead of consider only days which have also previous days within the same class)
-    indClassCur = which(isClass)
+    indClassCur = which(isPeriod)
     if(indClassCur[1]==1) indClassCur = indClassCur[2:length(indClassCur)]
     indClassPrev = indClassCur-1
     
     # on the contrary to GWEX, here I consider all days of the class (where there might
     # not be many elements) and the corr. previous days in order to increase the possible
     # days (instead of consider only days which have also previous days within the same class)
-    ar1.obs = cor(P.st[indClassPrev],P.st[indClassCur],use="pairwise.complete.obs")
+    ar1.obs = cor(P.mat[indClassPrev,,drop=T],P.mat[indClassCur,,drop=T],use="pairwise.complete.obs")
     
     # retrieve some objects and simulations that are done in get.M0 and infer.mat.omega
     
     # filtered matrix of precipitation for this period (3-mon moving window by dafault)
-    P.mat.class = P.mat[isClass,,drop=FALSE]
+    P.mat.class = P.mat[isPeriod,,drop=FALSE]
     
     # observed correlation of dry/wet states (see Eq. 6 in Evin et al. 2018)
     pi0 = dry.day.frequency(P.mat.class,th)
@@ -1283,24 +1464,20 @@ infer.autocor.amount = function(P.mat,pr.state,isPeriod,nLag,th,parMargin,typeMa
     
     # transform to normal quantiless
     Qtrans.list = lapply(Ptrans.list,function(x) qnorm(unlist(x)))
+    Qtrans_vec = unlist(Qtrans.list)
     
     # reshape in a matrix nStation x n.comb
-    Qtrans.mat = matrix(unlist(Qtrans.list), ncol=n.comb, byrow=T)
+    Qtrans_vec = as.vector(unlist(Qtrans.list))
     
     # filter infinite values if Pr = 0 or 1
-    Qtrans.mat[Qtrans.mat==-Inf] = -10^5
-    Qtrans.mat[Qtrans.mat==Inf] = 10^5
+    Qtrans_vec[Qtrans_vec==-Inf] = -10^5
+    Qtrans_vec[Qtrans_vec==Inf] = 10^5
     
     # simulate occurrence (once only)
-    Qtrans = QtransMat2Array(nChainFit,p,Qtrans.mat)
-    Xt = array(0,dim=c(nChainFit,p))
-    rndNorm = stats::rnorm(nChainFit)
-    for(t in (nLag+1):nChainFit){
-      comb = Xt[(t-nLag):(t-1),]==1
-      i.comb = which(apply(mat.comb, 1, function(x) all(x==comb)))
-      qTr = Qtrans[t,1,i.comb]
-      Xt[t,] = (rndNorm[t]<=qTr)
-    }
+    matcomb = matrix(as.numeric(mat.comb),ncol=nLag)
+    vecXt = simPrecipOccurrences4Fitting(nLag=nLag, nChainFit=nChainFit, matcomb=matcomb, 
+                                         Qtrans_vec=Qtrans_vec, rndNorm=rnorm(n = nChainFit+1000))
+    Xt = matrix(data = vecXt, ncol = 1)
     
     # find corresponding ar(1) parameter
     ar1 = get.vec.autocor(ar1.obs,Xt,parMargin,typeMargin,nChainFit,isParallel)
@@ -1334,27 +1511,25 @@ infer.autocor.amount = function(P.mat,pr.state,isPeriod,nLag,th,parMargin,typeMa
 #' @param copulaInt 'Gaussian' or 'Student': type of dependence for amounts (='Student' by default)
 #' @param isParallel logical: indicate computation in parallel or not (easier for debugging)
 #' 
+#' @export
+#' 
 #' @return \item{list}{list of estimates (e.g., M0, dfStudent)}
 #'
 #' @author Guillaume Evin
 infer.dep.amount = function(P.mat,isPeriod,infer.mat.omega.out,nLag,th,parMargin,typeMargin,nChainFit,
                             isMAR,copulaInt,isParallel){
-  # Class = Period
-  isClass = isPeriod
-  
   # number of stations
   p = ncol(P.mat)
   n = nrow(P.mat)
   
   # filtered data for this class: replace small values below the threshold by zero
   # for the sake of comparison with simulated values
-  P.mat.class = P.mat[isClass,]
+  P.mat.class = P.mat[isPeriod,]
   is.Zero = P.mat.class<=th&!is.na(P.mat.class)
   P.mat.class[is.Zero] = 0
   
   # direct pairwise Pearson correlations
   cor.int = cor(P.mat.class, use="pairwise.complete.obs")
-
   
   #### find corresponding needed zeta correlations between simulated intensities
   get.M0.out = get.M0(cor.int,infer.mat.omega.out,nLag,parMargin,typeMargin,nChainFit,isParallel)
@@ -1370,13 +1545,15 @@ infer.dep.amount = function(P.mat,isPeriod,infer.mat.omega.out,nLag,th,parMargin
     # on the contrary to GWEX, here I consider all days of the class (where there might
     # not be many elements) and the corr. previous days in order to increase the possible
     # days (instead of consider only days which have also previous days within the same class)
-    indClassCur = which(isClass)
+    indClassCur = which(isPeriod)
     if(indClassCur[1]==1) indClassCur = indClassCur[2:length(indClassCur)]
     indClassPrev = indClassCur-1
     
     # loop over the stations
     for(i.st in 1:p){
       P.st = P.mat[,i.st]
+      is.Zero = P.st<=th&!is.na(P.st)
+      P.st[is.Zero] = 0
       
       # on the contrary to GWEX, here I consider all days of the class (where there might
       # not be many elements) and the corr. previous days in order to increase the possible
@@ -1404,16 +1581,15 @@ infer.dep.amount = function(P.mat,isPeriod,infer.mat.omega.out,nLag,th,parMargin
 #' @param isPeriod vector of logical n x 1 indicating the days concerned by a 3-month period
 #' @param th threshold above which we consider that a day is wet (e.g. 0.2 mm)
 #' @param copulaInt type of dependence between inter-site amounts: 'Gaussian' or 'Student'
-#' @param M0 Matrix containing the inter-site spatial correlations
+#' @param M0 covariance matrix of gaussianized prec. amounts for all pairs of stations
 #'
+#' @export
+#' 
 #' @return \item{list}{list of estimates (e.g., M0, dfStudent)}
 #'
 #' @author Guillaume Evin
 fit.copula.amount = function(P.mat,isPeriod,th,copulaInt,M0)
 {
-  # Class = Period
-  isClass = isPeriod
-  
   # number of stations
   p = ncol(P.mat)
   n = nrow(P.mat)
@@ -1426,11 +1602,11 @@ fit.copula.amount = function(P.mat,isPeriod,th,copulaInt,M0)
     # on the contrary to GWEX, here I consider all days of the class (where there might
     # not be many elements) and the corr. previous days in order to increase the possible
     # days (instead of consider only days which have also previous days within the same class)
-    indNotClassCur = which(!isClass[2:n])
+    indNotClassCur = which(!isPeriod[2:n])
     indNotClassPrev = indNotClassCur-1
     
     # build matrix for this class and set small values <=th to NA
-    P.class = P.mat[isClass,]
+    P.class = P.mat[isPeriod,]
     is.small = P.class<=th&!is.na(P.class)
     P.class[is.small] = NA
     
@@ -1460,12 +1636,14 @@ fit.copula.amount = function(P.mat,isPeriod,th,copulaInt,M0)
 #' @param isPeriod vector of logical n x 1 indicating the days concerned by a 3-month period
 #' @param th threshold above which we consider that a day is wet (e.g. 0.2 mm)
 #' @param copulaInt type of dependance between inter-site amounts: 'Gaussian' or 'Student'
-#' @param M0 Matrix containing the inter-site spatial correlations
+#' @param M0 covariance matrix of gaussianized prec. amounts for all pairs of stations
 #' @param A Matrix containing the autocorrelation (temporal) correlations
 #'
+#' @export
+#' 
 #' @return list with the following items
 #' \itemize{
-#'   \item \strong{M0}{omega correlations for all pairs of stations}
+#'   \item \strong{M0}{covariance matrix of gaussianized prec. amounts for all pairs of stations}
 #'   \item \strong{A}{omega correlations for all pairs of stations}
 #'   \item \strong{covZ}{covariance matrix of the MAR(1) process}
 #'   \item \strong{sdZ}{standard deviation of the diagonal elements}
@@ -1475,9 +1653,6 @@ fit.copula.amount = function(P.mat,isPeriod,th,copulaInt,M0)
 #'
 #' @author Guillaume Evin
 fit.MAR1.amount = function(P.mat,isPeriod,th,copulaInt,M0,A){
-  # Class = Period
-  isClass = isPeriod
-  
   # dimensions
   p = ncol(P.mat)
   n = nrow(P.mat)
@@ -1498,7 +1673,7 @@ fit.MAR1.amount = function(P.mat,isPeriod,th,copulaInt,M0,A){
     # on the contrary to GWEX, here I consider all days of the class (where there might
     # not be many elements) and the corr. previous days in order to increase the possible
     # days (instead of consider only days which have also previous days within the same class)
-    indNotClassCur = which(!isClass[2:n])
+    indNotClassCur = which(!isPeriod[2:n])
     indNotClassPrev = indNotClassCur-1
     
     # build matrix where days not concerned by this class are set to NA
@@ -1537,6 +1712,8 @@ fit.MAR1.amount = function(P.mat,isPeriod,th,copulaInt,M0,A){
 #' @param pI vector of three parameters of the marginal distributions
 #' @param typeMargin type of marginal distribution: 'EGPD' or 'mixExp'
 #' @param U vector of uniform variates
+#'
+#' @export
 #'
 #' @return \item{matrix}{matrix of estimates p x 3}
 #'
@@ -1690,8 +1867,8 @@ fit.GWex.prec = function(objGwexObs,parMargin,listOption=NULL){
     #-------------------------------------------
     # wet/dry transition probabilities
     #-------------------------------------------
-    pr.state = lag.trans.proba.mat.byClass(P.mat,isMonth,listOption$th,
-                                           listOption$nLag,listOption$dayScale)
+    pr.state = lagTransProbaMatrix(P.mat,isMonth,listOption$th,
+                                   listOption$nLag)
     list.pr.state[[iMonth]] = pr.state
     
     
@@ -1724,10 +1901,10 @@ fit.GWex.prec = function(objGwexObs,parMargin,listOption=NULL){
     #-------------------------------------------
     if(p==1){
       infer.dep.amount.out = infer.autocor.amount(P.mat,pr.state,is3monthPeriod,
-                                              listOption$nLag,listOption$th,
-                                              parMargin.class,listOption$typeMargin,
-                                              listOption$nChainFit,listOption$isMAR,
-                                              listOption$isParallel)
+                                                  listOption$nLag,listOption$th,
+                                                  parMargin.class,listOption$typeMargin,
+                                                  listOption$nChainFit,listOption$isMAR,
+                                                  listOption$isParallel)
     }else{
       infer.dep.amount.out = infer.dep.amount(P.mat,is3monthPeriod,infer.mat.omega.out,
                                               listOption$nLag,listOption$th,parMargin.class,listOption$typeMargin,
@@ -1753,8 +1930,9 @@ fit.GWex.prec = function(objGwexObs,parMargin,listOption=NULL){
 
 ###===============================###===============================###
 #' disag.3D.to.1D
+#' 
 #' @useDynLib GWEX, .registration = TRUE
-#' @noRd
+#'
 #' @param Yobs matrix of observed intensities at 24h: (nTobs*3) x nStation
 #' @param YObsAgg matrix of observed 3-day intensities: nTobs x nStation
 #' @param mObsAgg vector of season corresponding to YobsAgg
@@ -1762,6 +1940,8 @@ fit.GWex.prec = function(objGwexObs,parMargin,listOption=NULL){
 #' @param mSimAgg vector of season corresponding to the period simulated
 #' @param prob.class vector of probabilities indicating class of "similar" mean intensities
 #'
+#' @export
+#' 
 #' @return \item{list}{Ysim matrix of disagregated daily precipitation, codeDisag matrix of disagregation codes}
 #'
 #' @author Guillaume Evin
@@ -1811,11 +1991,14 @@ disag.3D.to.1D = function(Yobs, # matrix of observed intensities at 24h: (nTobs*
   YObsAgg[is.na(YObsAgg)] = -9999
   
   ##### call Fortran function
-  disag3Day.out = .Fortran("disag3DayGWexPrec_F",  PACKAGE="GWEX",
-                           Yobs=Yobs, Y3obs=YObsAgg, mObs=as.integer(mObsAgg), cObs=as.integer(classObs),
-                           Y3sim=YSimAgg, mSim=as.integer(mSimAgg), cSim=as.integer(classSim),
-                           nTobs=nTobs, nStat=nStat, nTsim=nTsim, nLagScore=as.integer(1),
-                           Ysim=matrix(0,nrow=nTsim*3,ncol=nStat),codeDisag=matrix(0,nrow=nTsim,ncol=nStat))
+  disag3Day.out = disag3DayGWexPrec(Yobs=Yobs, 
+                                    Y3obs=YObsAgg, 
+                                    mObs=as.integer(mObsAgg), 
+                                    cObs=as.integer(classObs),
+                                    Y3sim=YSimAgg, 
+                                    mSim=as.integer(mSimAgg), 
+                                    cSim=as.integer(classSim), 
+                                    nLagScore=as.integer(1))
   return(list(Ysim=disag3Day.out$Ysim,codeDisag=disag3Day.out$codeDisag))
 }
 
@@ -1826,9 +2009,14 @@ disag.3D.to.1D = function(Yobs, # matrix of observed intensities at 24h: (nTobs*
 #'
 #' generate boolean variates which describe the dependence
 #' between intersite occurrence correlations and wet/dry persistence
+#'
+#' @useDynLib GWEX, .registration = TRUE
+#' 
 #' @param objGwexFit object of class GwexFit
 #' @param vecMonth vector n x 1 of integers indicating the months
 #'
+#' @export
+#' 
 #' @return \item{matrix of logical}{occurrences simulated}
 #'
 #' @author Guillaume Evin
@@ -1878,15 +2066,10 @@ sim.GWex.occ = function(objGwexFit,vecMonth){
     }
   }
   
-  
   # Start simulation
-  for(t in (nLag+1):n){
-    for(st in 1:p){
-      comb = Xt[(t-nLag):(t-1),st]==1
-      i.comb = which(apply(mat.comb, 1, function(x) all(x==comb)))
-      qTr = Qtrans[t,st,i.comb]
-      Xt[t,st] = (rndNorm[t,st]<=qTr)
-    }
+  for(st in 1:p){
+    Xt[,st] = simPrecipOccurrences(nLag=nLag, matcomb=mat.comb, 
+                                   Qtrans=Qtrans[,st,],rndNorm=rndNorm[,st])
   }
   
   return(Xt)
@@ -1900,6 +2083,8 @@ sim.GWex.occ = function(objGwexFit,vecMonth){
 #' @param objGwexFit object of class GwexFit
 #' @param iM integer indicating the month
 #'
+#' @export
+#' 
 #' @return \item{list}{list of parameters}
 #'
 #' @author Guillaume Evin
@@ -1927,6 +2112,8 @@ sim.GWex.Yt.Pr.get.param = function(objGwexFit,iM){
 #' @param copulaInt 'Gaussian' or 'Student'
 #' @param p number of stations
 #'
+#' @export
+#' 
 #' @return \item{matrix}{matrix n x p of uniform dependent variates}
 #'
 #' @author Guillaume Evin
@@ -1953,6 +2140,8 @@ sim.Zt.Spatial = function(PAR,copulaInt,p){
 #' @param Zprev previous Gaussian variate
 #' @param p number of stations
 #'
+#' @export
+#' 
 #' @return \item{matrix}{matrix n x p of uniform dependent variates}
 #'
 #' @author Guillaume Evin
@@ -1984,6 +2173,8 @@ sim.Zt.MAR = function(PAR,copulaInt,Zprev,p){
 #' @param objGwexFit object of class GwexFit
 #' @param vecMonth vector n x 1 of integer indicating the months
 #'
+#' @export
+#' 
 #' @return \item{matrix}{matrix n x p of uniform dependent variates}
 #'
 #' @author Guillaume Evin
@@ -2058,6 +2249,8 @@ sim.GWex.Yt.Pr = function(objGwexFit,vecMonth){
 #' @param vecMonth vector of integer indicating the months
 #' @param Yt.Pr uniform variates describing dependence between inter-site amounts
 #'
+#' @export
+#' 
 #' @return \item{matrix}{matrix n x p of simulated non-zero precipitation intensities}
 #'
 #' @author Guillaume Evin
@@ -2077,14 +2270,14 @@ sim.GWex.Yt = function(objGwexFit,vecMonth,Yt.Pr){
   # Start simulation
   for(iM in 1:12){
     # filter
-    isClass = (vecMonth == iM)
-    nClass = sum(isClass)
+    isPeriod = (vecMonth == iM)
+    nClass = sum(isPeriod)
     
     if(nClass>0){
       # pour chaque station
       for(st in 1:p){
         # days for this period as matrix indices
-        i.mat = cbind(which(isClass),rep(st,nClass))
+        i.mat = cbind(which(isPeriod),rep(st,nClass))
         # intensities
         pI = parMargin[[iM]][st,]
         # inverse-cdf
@@ -2105,6 +2298,8 @@ sim.GWex.Yt = function(objGwexFit,vecMonth,Yt.Pr){
 #' @param Xt simulated occurrences
 #' @param Yt simulated intensities
 #'
+#' @export
+#' 
 #' @return \item{matrix}{matrix n x p of simulated precipitations}
 #'
 #' @author Guillaume Evin
@@ -2142,7 +2337,9 @@ mask.GWex.Yt = function(Xt,Yt){
 #' @param myseed seed of the random generation, to be fixed if the results need to be replicated
 #' @param objGwexObs optional: necessary if we need observations to simulate (e.g. disaggregation of 3-day periods)
 #' @param prob.class vector of probabilities indicating class of "similar" mean intensities
+#' 
 #' @export
+#' 
 #' @return \item{matrix}{Precipitation simulated for the dates contained in vec.Dates at the different stations}
 #'
 #' @author Guillaume Evin
@@ -2219,17 +2416,16 @@ sim.GWex.prec.1it = function(objGwexFit,vecDates,myseed,objGwexObs,prob.class){
 #' @param type distribution: 'EGPD' or 'mixExp'
 #'
 #' @return \item{matrix}{matrix of estimates p x 3}
+#' 
 #' @export
+#' 
 #' @author Guillaume Evin
 fit.margin.cdf = function(P.mat,isPeriod,th,type=c('EGPD','mixExp')){
   # number of stations
   p = ncol(P.mat)
   
-  # class = Period
-  isClass = isPeriod
-  
   # filtered matrix of precipitation for this period (3-mon moving window by dafault)
-  P.mat.class = P.mat[isClass,,drop=FALSE]
+  P.mat.class = P.mat[isPeriod,,drop=FALSE]
   
   # prepare output
   list.out = matrix(nrow=p,ncol=3)

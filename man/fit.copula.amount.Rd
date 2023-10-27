@@ -15,7 +15,7 @@ fit.copula.amount(P.mat, isPeriod, th, copulaInt, M0)
 
 \item{copulaInt}{type of dependence between inter-site amounts: 'Gaussian' or 'Student'}
 
-\item{M0}{Matrix containing the inter-site spatial correlations}
+\item{M0}{covariance matrix of gaussianized prec. amounts for all pairs of stations}
 }
 \value{
 \item{list}{list of estimates (e.g., M0, dfStudent)}

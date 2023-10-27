@@ -21,7 +21,7 @@ get.M0(
 
 \item{nLag}{order of the Markov chain}
 
-\item{parMargin}{parameters of the margins 2 x 3}
+\item{parMargin}{parameters of the margins p x 3}
 
 \item{typeMargin}{type of marginal distribution: 'EGPD' or 'mixExp'}
 
@@ -33,7 +33,7 @@ get.M0(
 list with two items
 \itemize{
   \item \strong{Xt}{long simulation of the wet/dry states according to the model}
-  \item \strong{M0}{omega correlations for all pairs of stations}
+  \item \strong{M0}{covariance matrix of gaussianized prec. amounts for all pairs of stations}
 }
 }
 \description{
