@@ -1001,8 +1001,8 @@ simPrecipOcc = function(nLag,n,pr){
 #' 
 #' @return list with two items
 #' \itemize{
-#'   \item \strong{Xt}{long simulation of the wet/dry states according to the model}
-#'   \item \strong{M0}{covariance matrix of gaussianized prec. amounts for all pairs of stations}
+#'   \item \strong{Xt} long simulation of the wet/dry states according to the model
+#'   \item \strong{M0} covariance matrix of gaussianized prec. amounts for all pairs of stations
 #' }
 #'
 #' @author Guillaume Evin
@@ -1643,12 +1643,12 @@ fit.copula.amount = function(P.mat,isPeriod,th,copulaInt,M0)
 #' 
 #' @return list with the following items
 #' \itemize{
-#'   \item \strong{M0}{covariance matrix of gaussianized prec. amounts for all pairs of stations}
-#'   \item \strong{A}{omega correlations for all pairs of stations}
-#'   \item \strong{covZ}{covariance matrix of the MAR(1) process}
-#'   \item \strong{sdZ}{standard deviation of the diagonal elements}
-#'   \item \strong{corZ}{correlation matrix of the MAR(1) process}
-#'   \item \strong{dfStudent}{degrees of freedom for the Student copula if CopulaInt is equal to "Student"}
+#'   \item \strong{M0} covariance matrix of gaussianized prec. amounts for all pairs of stations
+#'   \item \strong{A} omega correlations for all pairs of stations
+#'   \item \strong{covZ} covariance matrix of the MAR(1) process
+#'   \item \strong{sdZ} standard deviation of the diagonal elements
+#'   \item \strong{corZ} correlation matrix of the MAR(1) process
+#'   \item \strong{dfStudent} degrees of freedom for the Student copula if CopulaInt is equal to "Student"
 #' }
 #'
 #' @author Guillaume Evin

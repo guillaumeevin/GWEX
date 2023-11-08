@@ -221,10 +221,10 @@ NumericVector getrmsei(NumericMatrix Yobs, // Matrix of observations: nTobs*3 [d
     for (int j = 0; j < nTobs; j++) {
       
       //same month and class
-      notSameClass = (mSim(i)/=mObs(j)) | (cSim(i)/=cObs(j));
+      notSameClass = (mSim(i)/=mObs(j)) || (cSim(i)/=cObs(j));
       //if any observed value is missing in the observed prec. field or if the months do not correspond
       //we discard this observed day
-      if((any_sug(Y3obs(j,_) == naVal)) | notSameClass) {
+      if((any_sug(Y3obs(j,_) == naVal)) || notSameClass) {
         rmseI(j) = 1E30;
       } else {
         //absolute differences between adimensioned precipitation for this day
@@ -255,10 +255,10 @@ NumericVector getrmsei(NumericMatrix Yobs, // Matrix of observations: nTobs*3 [d
     for (int j = nLagScore; j < nTobs; j++) {
       
       //same month and class
-      notSameClass = (mSim(i)!=mObs(j)) | (cSim(i)!=cObs(j));
+      notSameClass = (mSim(i)!=mObs(j)) || (cSim(i)!=cObs(j));
       //if any observed value is missing in the observed prec. field or if the months do not correspond
       //we discard this observed day
-      if(any_sug(Y3obs(j,_) == naVal) | notSameClass) {
+      if(any_sug(Y3obs(j,_) == naVal) || notSameClass) {
         rmseI(j) = 3E30;
       } else {
         //absolute differences between adimensioned precipitation for this day
@@ -434,10 +434,10 @@ List disag3DayGWexPrec(NumericMatrix Yobs, // Matrix of observations: nTobs*3 [d
         if(i < nLagScore) {
           for (int j = 0; j < nTobs; j++) {
             //same month and class
-            notSameClass = (mSim(i)/=mObs(j)) | (cSim(i)/=cObs(j));
+            notSameClass = (mSim(i)/=mObs(j)) || (cSim(i)/=cObs(j));
             //if any observed value is missing in the observed prec. field or if the months do not correspond
             //we discard this observed day
-            if((Y3obs(j,k) == naVal) | notSameClass) {
+            if((Y3obs(j,k) == naVal) || notSameClass) {
               rmseI(j) = 1E30;
             } else {
               rmseI(j) = abs(Y3sim(i,k)-Y3obs(j,k));
@@ -452,11 +452,11 @@ List disag3DayGWexPrec(NumericMatrix Yobs, // Matrix of observations: nTobs*3 [d
           //for the next days, compute score
           for (int j = nLagScore; j < nTobs; j++) {
             //same month and class
-            notSameClass = (mSim(i)!=mObs(j)) | (cSim(i)!=cObs(j));
+            notSameClass = (mSim(i)!=mObs(j)) || (cSim(i)!=cObs(j));
             //if any observed value is missing in the observed prec. field or if the months do not correspond
             //or if there is no observed precip for this day
             //we discard this observed day
-            if(((Y3obs(j,k) == naVal) | (Y3obs(j,k) == 0)) | notSameClass) {
+            if(((Y3obs(j,k) == naVal) || (Y3obs(j,k) == 0)) || notSameClass) {
               rmseI(j) = 1E30;
             } else {
               rmseIJ = abs(Y3sim(i,k)-Y3obs(j,k));

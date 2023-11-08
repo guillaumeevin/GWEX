@@ -58,34 +58,28 @@ to=as.Date("31/12/2014",format="\%d/\%m/\%Y"),by='day')
 #               FIT THE PRECIPITATION MODEL
 ###############################################################
 
-# Format observations: create a G-Wex object
-# myObsPrec = GwexObs(variable='Prec',date=vecDates,obs=dailyPrecipGWEX[,1:2])
+# Format observations: create a Gwex object for one station only to show a quick
+# example. The syntax is similar for multi-site applications.
+myObsPrec = GwexObs(variable='Prec',date=vecDates,obs=dailyPrecipGWEX[,1,drop=FALSE])
 
-# Options: specify the threshold for precipitation (0.5 mm) to distinguish wet and 
-# dry states (th), a Student copula for 
-# the spatial dependence (copulaInt), a model based on 3-day aggregated values 
-# (is3Damount), a MAR(1) process (isMAR), a EGPD distribution for marginal intensities
-# ('typeMargin'), and 200 replicates for the runs used during the fitting process
-# (this value being 100,000 by default, in order to obtain a reasonable precision of the 
-# estimates) 
-# listOption = list(th=0.5,nLag=1,copulaInt='Student',is3Damount=TRUE,isMAR=TRUE,
-# typeMargin='EGPD',nChainFit=200)
-
-# Fit precipitation model
-# myParPrec = fitGwexModel(myObsPrec,listOption=listOption) # fit model
-# myParPrec # print object
+# Fit precipitation model with a threshold of 0.5 mm to distinguish wet and dry 
+# states (th) and keep default options otherwise, e.g. a Gaussian
+# copula for the spatial dependence (copulaInt) and a mixExp distribution for 
+# marginal intensities ('typeMargin')
+myParPrec = fitGwexModel(myObsPrec,listOption=list(th=0.5))
+myParPrec # print object
 
 ###############################################################
 #     FIT THE TEMPERATURE MODEL, COND. TO PRECIPITATION
 ###############################################################
 # Format observations: create a G-Wex object
-# myObsTemp = GwexObs(variable='Temp',date=vecDates,obs=dailyTemperGWEX)
+myObsTemp = GwexObs(variable='Temp',date=vecDates,obs=dailyTemperGWEX)
 
 # Fit temperature model with a long-term linear trend ('hasTrend'), Gaussian margins 
 # ('typeMargin') and Gaussian spatial dependence ('depStation')
-# myParTemp = fitGwexModel(myObsTemp,listOption=list(hasTrend=TRUE,typeMargin='Gaussian',
-# depStation='Gaussian'))
-# myParTemp # print object
+myParTemp = fitGwexModel(myObsTemp,listOption=list(hasTrend=TRUE,typeMargin='Gaussian',
+depStation='Gaussian'))
+myParTemp # print object
 }
 \author{
 Guillaume Evin

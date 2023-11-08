@@ -32,8 +32,8 @@ get.M0(
 \value{
 list with two items
 \itemize{
-  \item \strong{Xt}{long simulation of the wet/dry states according to the model}
-  \item \strong{M0}{covariance matrix of gaussianized prec. amounts for all pairs of stations}
+  \item \strong{Xt} long simulation of the wet/dry states according to the model
+  \item \strong{M0} covariance matrix of gaussianized prec. amounts for all pairs of stations
 }
 }
 \description{
