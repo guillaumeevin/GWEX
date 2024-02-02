@@ -217,16 +217,16 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
   }else{
     if(!is.list(listOption)) stop('listOption must be a list')
   }
-
+  
   # hasTrend
   if('hasTrend' %in% names(listOption)){
     hasTrend = listOption[['hasTrend']]
     if(!is.logical(hasTrend)) stop('hasTrend must be logical')
   }else{
-    hasTrend = F
+    hasTrend = T
     listOption[['hasTrend']] = hasTrend
   }
-
+  
   # objGwexPrec: if objGwexPrec is present, we condition the temperature model to precipitation
   # observations/simulations (see Wilks, 2009)
   if('objGwexPrec' %in% names(listOption)){
@@ -240,7 +240,7 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
   
   # isParallel: not for temperature
   listOption[['isParallel']] = FALSE
-
+  
   # typeMargin: 'SGED' (default) or 'Gaussian'
   if('typeMargin' %in% names(listOption)){
     typeMargin = listOption[['typeMargin']]
@@ -249,7 +249,7 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
     typeMargin = 'SGED'
     listOption[['typeMargin']] = typeMargin
   }
-
+  
   # depStation: 
   # - 'MAR1': applies a Multivariate Autoregressive process to include temporal and spatial dependences.
   # - 'Gaussian': Just include a spatial dependence.
@@ -260,35 +260,35 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
     depStation = 'MAR1'
     listOption[['depStation']] = depStation
   }
-
+  
   ######### Initialize some objects ##########
   # Precipitation matrix
   mat.T = objGwexObs@obs
-
+  
   # number of stations
   p = ncol(mat.T)
-
+  
   # Dates
   vec.dates = objGwexObs@date
   n.day = length(vec.dates)
-
+  
   # Years
   vec.y = strftime(vec.dates, "%Y")
   n.y = length(unique(vec.y))
-
+  
   # Months
   vec.month = as.numeric(strftime(vec.dates, "%m"))
-
+  
   # liste des mois
   vec.month.char = get.list.month()
   n.m = length(vec.month.char)
-
-
+  
+  
   # initialise some objects
   list.par.margin = list()
   u = matrix(nrow = n.day, ncol=p)
-
-
+  
+  
   ######## NON-STATIONARITY TREND ###########
   if(hasTrend){
     # estimate the trend by season
@@ -298,7 +298,7 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
       per.m = get.period.fitting.month(vec.month.char[m])
       is.per = vec.month%in%per.m
       # regional mean
-      mat.T.per = apply(mat.T[is.per,],1,mean,na.rm=T)
+      mat.T.per = apply(mat.T[is.per,,drop=F],1,mean,na.rm=T)
       # annual averages
       t.mean = aggregate(mat.T.per,by=list(y=vec.y[is.per]),FUN=mean)$x
       # apply a linear regression
@@ -306,21 +306,21 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
       # retrieve slope
       lm.slope[m] = lm.model$coefficients[2]
     }
-
+    
     # smooth these slopes
     smooth.slope = lowess(lm.slope)$y
-
+    
     # predicted trend
     t.trend = predict.trend(smooth.slope,vec.dates)
-
+    
     # return list
     list.trend = list(lm = lm.slope, smooth = smooth.slope)
   }else{
     t.trend = NULL
     list.trend = list()
   }
-
-
+  
+  
   #====================== MARGINS ========================
   # for the progress bar
   pb <- txtProgressBar()
@@ -329,8 +329,8 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
   for(i.st in 1:p){
     # vector of temperature for this station
     t.st = mat.T[,i.st]
-
-
+    
+    
     ######## NON-STATIONARITY TREND ###########
     if(hasTrend){
       # remove the trend
@@ -339,13 +339,13 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
       # otherwise we do not apply a trend
       t.detrend = t.st
     }
-
+    
     Tdetrend[,i.st] = t.detrend
-
+    
     ######## SEASONALITY ###########
     # empirical estimate of the seasonal cycle for the mean and sd of the temperature
     # we first remove this seasonality for each station
-
+    
     # if we condition on precipitation values, we fit a seasonal cycles for two precipitatio states:
     # (wet / dry)
     if(condPrec){
@@ -361,12 +361,12 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
         }
         is.state[is.na(is.state)] = F
         t.sel[!is.state] = NA
-
+        
         # seasonal cycle of the daily mean: average for each day of the year
         t.mean.season[[state]] = get.seasonal(t.sel,vec.dates,"mean")
         t.mean.pred = predictTempCycle(t.mean.season[[state]],vec.dates)
         t.sh = t.sel - t.mean.pred # remove mean
-
+        
         # seasonal cycle of the daily sd: smooth estimate of sd and average for each day of the year
         t.std.season[[state]] = get.seasonal(t.sh,vec.dates,"sd")
         t.std.pred = predictTempCycle(t.std.season[[state]],vec.dates)
@@ -377,36 +377,36 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
       t.mean.season = get.seasonal(t.detrend,vec.dates,"mean")
       t.mean.pred = predictTempCycle(t.mean.season,vec.dates)
       t.sh = t.detrend - t.mean.pred # remove mean
-
+      
       # seasonal cycle of the daily sd: smooth estimate of sd and average for each day of the year
       t.std.season = get.seasonal(t.sh,vec.dates,"sd")
       t.std.pred = predictTempCycle(t.std.season,vec.dates)
       t.std = t.sh/t.std.pred # standardise
     }
-
-
+    
+    
     ######## MARGINAL DISTRIBUTION ###########
     # A Skew normal distribution is fitted to the standardized temperature
-
+    
     # initialize list
     list.SkewNormal.par = list()
-
+    
     if(typeMargin=='SGED'){
       # for each month
       for(m in vec.month.char){
         # three month period
         per.m = get.period.fitting.month(m)
-
+        
         # donnees filtrees
         t.std.per = t.std[vec.month%in%per.m]
         t.filt = t.std.per[!is.na(t.std.per)]
-
+        
         # fit SkewNormal distribution
         list.SkewNormal.par[[m]] = mySgedFit(t.filt)
       }
     }
-
-
+    
+    
     # PIT transform (u are the inputs for copula functions)
     if(typeMargin=='Gaussian'){
       u[,i.st] = pnorm(t.std,mean=0, sd=1)
@@ -417,24 +417,24 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
         u[is.m,i.st] = fGarch::psged(t.std[is.m],mean=0, sd=1, nu=par.m[1], xi=par.m[2])
       }
     }
-
-
+    
+    
     ######## ALL PARAMETERS FOR THE MARGINS ###########
     list.par.margin[[i.st]] = list(season.mean = t.mean.season,
                                    season.std = t.std.season,
                                    SkewNormal.par = list.SkewNormal.par)
-
+    
     # progress bar
     setTxtProgressBar(pb, i.st/(p+12))
   }
-
+  
   # detrend temperature data
   list.trend[['Tdetrend']] = Tdetrend
-
-
+  
+  
   #========== TEMPORAL AND SPATIAL DEPENDENCE ============
   list.par.dep = list()
-
+  
   # Gaussian quantiles
   q.gau = qnorm(u)
   
@@ -442,31 +442,31 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
   for(m in vec.month.char){
     # three month period
     per.m = get.period.fitting.month(m)
-
+    
     # donnees filtrees
-    q.gau.per = q.gau[vec.month%in%per.m,]
+    q.gau.per = q.gau[vec.month%in%per.m,,drop=F]
     n.day = nrow(q.gau.per)
-
+    
     if(depStation=='MAR1'){
       # inter-site correlations between all pairs of
       # stations, at lag-0 and lag-1
       q.lag = cbind(q.gau.per[2:n.day,],q.gau.per[1:(n.day-1),])
-
+      
       # pairwise estimation of a correlation matrix with the Kendall tau
       corALL = cor(q.lag, method="pearson", use="pairwise.complete.obs")
-
+      
       # inter-site Pearson correlations + its inverse
       M0 = corALL[1:p,1:p]
       M0inv = MASS::ginv(M0)
-
+      
       # lag-1 correlations between pairs of stations
       M1 = corALL[1:p,(p+1):(2*p)]
-
+      
       # covariance matrices of the MAR(1) process (Matalas, 1967)
       A = M1%*%M0inv
       covZ = M0 - M1%*%M0inv%*%t(M1)
-
-
+      
+      
       # ALL PARAMETERS FOR THE MAR(1)
       list.par.dep[[m]] = list(M0=M0,M1=M1,A=A,covZ=covZ)
     }else if(depStation=='Gaussian'){
@@ -482,8 +482,8 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
   
   # close progress bar
   close(pb)
-
-
+  
+  
   # return options and estimated parameters
   listPar=list(Xt = q.gau,
                list.trend = list.trend,

@@ -1,9 +1,9 @@
 Package: GWEX
 Type: Package
-Date: 2023-11-08
+Date: 2024-02-02
 License: GPL-3
 Title: Multi-Site Stochastic Models for Daily Precipitation and Temperature
-Version: 1.1.2
+Version: 1.1.3
 Authors@R: c(person("Guillaume","Evin",role = c("aut", "cre"),email="guillaume.evin@inrae.fr"))
 Author: Guillaume Evin [aut, cre]
 Maintainer: Guillaume Evin <guillaume.evin@inrae.fr>
