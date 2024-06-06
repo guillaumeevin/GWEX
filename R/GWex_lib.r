@@ -689,7 +689,7 @@ simGwexModel <- function(objGwexFit, nb.rep = 10, d.start=as.Date("01011900","%d
         sim.GWex.1it = sim.GWex.prec.1it(objGwexFit,vecDates,myseed=iSim,objGwexObs=objGwexObs,prob.class=prob.class)
       }else if(typeVar=='Temp'){
         if(condPrec){
-          matSimPrec = simPrec[,,iSim]
+          matSimPrec = simPrec[,,iSim,drop=F]
         }else{
           matSimPrec = NULL
         }

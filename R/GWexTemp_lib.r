@@ -609,9 +609,9 @@ sim.GWex.temp.1it = function(objGwexFit,vec.Dates,myseed,matSimPrec){
       x.mean.pred = x.std.pred = vector(length=n)
       for(state in c("dry","wet")){
         if(state == 'dry'){
-          is.state = matSimPrec[,i.st]<=th
+          is.state = matSimPrec[,i.st,drop=F]<=th
         }else if(state == 'wet'){
-          is.state = matSimPrec[,i.st]>th
+          is.state = matSimPrec[,i.st,drop=F]>th
         }
         x.mean.pred[is.state] = predictTempCycle(season.mean[[state]],vec.Dates[is.state])
         x.std.pred[is.state] = predictTempCycle(season.std[[state]],vec.Dates[is.state])
