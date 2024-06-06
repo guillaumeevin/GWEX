@@ -82,7 +82,6 @@ get.seasonal = function(x,vec.Dates,myfun='mean'){
   dfz = stats::na.omit(df)
   loess.out = loess(seas~d,data=dfz,span = 0.2)
   seas.smooth = predict(loess.out, df)
-
   return(seas.smooth)
 }
 
