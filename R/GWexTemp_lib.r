@@ -52,7 +52,7 @@ get.nonleap.dm = function(){
 # get.seasonal
 #
 # Estimate the annual cycle of temperature. For each day, we apply the function \code{fun} to all temperature data for this day (ex. the mean
-# of all January, 1st). This cycle is smoothed with the \code{\link{lowess}} function.
+# of all January, 1st). This cycle is smoothed with the \code{\link{loess}} function.
 #
 # @param x temperature data
 # @param vec.Dates vector of Dates associated to x
@@ -78,7 +78,8 @@ get.seasonal = function(x,vec.Dates,myfun='mean'){
   }
 
   # smooth trend
-  seas.smooth = lowess(seas,f=1/10)$y
+  df = data.frame(seas=seas,d=1:365)
+  seas.smooth = loess(seas~d,data=df,span = 0.2)$fitted
 
   return(seas.smooth)
 }
