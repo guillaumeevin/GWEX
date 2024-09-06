@@ -607,6 +607,7 @@ is.GwexSim <- function(obj) is(obj, 'GwexSim')
 #' @param prob.class vector of probabilities indicating class of "similar" mean intensities
 #' @param objGwexSim optional: an object of class \code{\linkS4class{GwexSim}} if we need simulations to simulate (temp conditional to prec)
 #' @param nCluster optional, number of clusters which can be used for the parallel computation
+#' @param useSeed optional: a logical variable indicating if we control the seed of the simulations or not
 #'
 #' @return \item{GwexSim}{an object of class \code{\linkS4class{GwexSim}}. Contains sim (3D-array with the simulations) and a vector of dates}
 #'
@@ -645,7 +646,7 @@ is.GwexSim <- function(obj) is(obj, 'GwexSim')
 #'                           d.end=vecDates[365],objGwexObs=myObsPrec)
 #' mySimTemp # print object
 simGwexModel <- function(objGwexFit, nb.rep = 10, d.start=as.Date("01011900","%d%m%Y"), d.end=as.Date("31121999","%d%m%Y"),
-                         objGwexObs=NULL, prob.class=c(0.5,0.75,0.9,0.99),objGwexSim=NULL,nCluster=1){
+                         objGwexObs=NULL, prob.class=c(0.5,0.75,0.9,0.99),objGwexSim=NULL,nCluster=1,useSeed=FALSE){
   # check objGwexFit
   if(!is.GwexFit(objGwexFit)) stop('objGwexFit: objGwexFit argument must be a GwexFit object')
 
@@ -684,16 +685,23 @@ simGwexModel <- function(objGwexFit, nb.rep = 10, d.start=as.Date("01011900","%d
     # simulate from GWex model
     iSim = NULL
     sim.GWex.out <- foreach(iSim=1:nb.rep, .combine='acomb', .multicombine=TRUE) %dopar% {
+      # 04/09/2024: add the possibility of avoiding the same seeds
+      if(useSeed){
+        seed = iSim
+      }else{
+        seed = NULL
+      }
+      
       # call generating function
       if(typeVar=='Prec'){
-        sim.GWex.1it = sim.GWex.prec.1it(objGwexFit,vecDates,myseed=iSim,objGwexObs=objGwexObs,prob.class=prob.class)
+        sim.GWex.1it = sim.GWex.prec.1it(objGwexFit,vecDates,myseed=seed,objGwexObs=objGwexObs,prob.class=prob.class)
       }else if(typeVar=='Temp'){
         if(condPrec){
           matSimPrec = simPrec[,,iSim,drop=F]
         }else{
           matSimPrec = NULL
         }
-        sim.GWex.1it = sim.GWex.temp.1it(objGwexFit,vecDates,myseed=iSim,matSimPrec=matSimPrec)$Tdetrend
+        sim.GWex.1it = sim.GWex.temp.1it(objGwexFit,vecDates,myseed=seed,matSimPrec=matSimPrec)$Tdetrend
       }
       return(sim.GWex.1it)
     }
@@ -703,15 +711,22 @@ simGwexModel <- function(objGwexFit, nb.rep = 10, d.start=as.Date("01011900","%d
   }else{
     sim.GWex.out = array(dim=c(n,p,nb.rep))
     for(iSim in 1:nb.rep){
+      # 04/09/2024: add the possibility of avoiding the same seeds
+      if(useSeed){
+        seed = iSim
+      }else{
+        seed = NULL
+      }
+      
       if(typeVar=='Prec'){
-        sim.GWex.out[,,iSim] = sim.GWex.prec.1it(objGwexFit,vecDates,myseed=iSim,objGwexObs=objGwexObs,prob.class=prob.class)
+        sim.GWex.out[,,iSim] = sim.GWex.prec.1it(objGwexFit,vecDates,myseed=seed,objGwexObs=objGwexObs,prob.class=prob.class)
       }else if(typeVar=='Temp'){
         if(condPrec){
           matSimPrec = simPrec[,,iSim,drop=FALSE]
         }else{
           matSimPrec = NULL
         }
-        sim.GWex.out[,,iSim] = sim.GWex.temp.1it(objGwexFit,vecDates,myseed=iSim,matSimPrec=matSimPrec)$Tdetrend
+        sim.GWex.out[,,iSim] = sim.GWex.temp.1it(objGwexFit,vecDates,myseed=seed,matSimPrec=matSimPrec)$Tdetrend
       }
     }
   }

@@ -12,7 +12,8 @@ simGwexModel(
   objGwexObs = NULL,
   prob.class = c(0.5, 0.75, 0.9, 0.99),
   objGwexSim = NULL,
-  nCluster = 1
+  nCluster = 1,
+  useSeed = FALSE
 )
 }
 \arguments{
@@ -31,6 +32,8 @@ simGwexModel(
 \item{objGwexSim}{optional: an object of class \code{\linkS4class{GwexSim}} if we need simulations to simulate (temp conditional to prec)}
 
 \item{nCluster}{optional, number of clusters which can be used for the parallel computation}
+
+\item{useSeed}{optional: a logical variable indicating if we control the seed of the simulations or not}
 }
 \value{
 \item{GwexSim}{an object of class \code{\linkS4class{GwexSim}}. Contains sim (3D-array with the simulations) and a vector of dates}
