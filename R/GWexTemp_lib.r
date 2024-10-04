@@ -517,9 +517,16 @@ sim.GWex.temp.1it = function(objGwexFit,vec.Dates,myseed,matSimPrec){
   # number of stations
   p = getNbStations(objGwexFit)
 
-  # retreive option (model conditional to precipitation?)
+  # retrieve option (model conditional to precipitation?)
   condPrec = objGwexFit@fit$listOption$condPrec
-  if(condPrec) th = 0.2
+  
+  # if temperatures are simulated conditionnally to the precipitation, we 
+  # define a threshold to identify wet and dry days. In the simulations, we
+  # assume a threshold of 0 mm to preserve the characteristics of the GWEX
+  # precipitation model (e.g. probability of having a dry day)
+  if(condPrec){
+    th = 0
+  }
 
   # caracteristics of the time series generated
   n = length(vec.Dates)
