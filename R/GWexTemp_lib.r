@@ -198,6 +198,7 @@ predict.trend = function(vec.slope,vec.Dates){
 # \itemize{
 #   \item \strong{hasTrend}: logical value, do we fit a linear trend for the long-term change, =FALSE by default
 #   \item \strong{objGwexPrec}: object of class \code{\linkS4class{GwexObs}} containing precipitation observations. If provided, we assume that temperature must be modelled and simulated according to the precipitation states 'dry' and 'wet'. For each state, a seasonal cycle is fitted (mean and sd).
+#   \item \strong{th}: if objGwexPrec is in listOption, th is the threshold above which we consider that a day is wet (e.g. 0.2 mm)
 #   \item \strong{typeMargin}: 'SGED' (default) or 'Gaussian': type of marginal distribution.
 #   \item \strong{depStation}: logical value, do we apply a Autoregressive Multivariate Autoregressive model (order 1) =TRUE by default
 # }
@@ -229,12 +230,20 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
     listOption[['hasTrend']] = hasTrend
   }
   
+  # th: thresold for precipitation (used only if objGwexPrec is present)
+  if('th' %in% names(listOption)){
+    th = listOption[['th']]
+    if(!(is.numeric(th)&(th>=0))) stop('wrong value for th')
+  }else{
+    th = 0.2
+    listOption[['th']] = th
+  }
+  
   # objGwexPrec: if objGwexPrec is present, we condition the temperature model to precipitation
   # observations/simulations (see Wilks, 2009)
   if('objGwexPrec' %in% names(listOption)){
     condPrec = T
     objGwexPrec = listOption[['objGwexPrec']]
-    th = 0.2 # threshold to separate dry/wet states
   }else{
     condPrec = F
   }

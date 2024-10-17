@@ -30,6 +30,7 @@ and for temperature, a list with the following fields:
 \itemize{
   \item \strong{hasTrend}: logical value, do we fit a linear trend for the long-term change, =FALSE by default
   \item \strong{objGwexPrec}: object of class \code{\linkS4class{GwexObs}} containing precipitation observations. If provided, we assume 
+  \item \strong{th}: if objGwexPrec is present, \code{th} is the threshold above which we consider that a day is wet (e.g. 0.2 mm)
   that temperature must be modelled and simulated according to the precipitation states 'dry' and 'wet'. For each state, a seasonal cycle is fitted (mean and sd).
   \item \strong{typeMargin}: 'SGED' (default) or 'Gaussian': type of marginal distribution.
   \item \strong{depStation}: 'MAR1' (default) or 'Gaussian': MAR1 (Multivariate Autoregressive model order 1) for the spatial and temporal dependence or 'Gaussian' 
