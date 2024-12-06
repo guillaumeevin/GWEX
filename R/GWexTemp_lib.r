@@ -64,6 +64,13 @@ get.nonleap.dm = function(){
 #
 # @author Guillaume Evin
 get.seasonal = function(x,vec.Dates,myfun='mean'){
+  # choose span values, smoother cycle are preferred for the standard deviation
+  if(myfun=="mean"){
+    myspan = 0.2
+  }else if(myfun=='sd'){
+    myspan = 0.5
+  }
+  
   # day/month for the observed dates
   vec.Dates.dm = format(vec.Dates,'%d%m')
 
@@ -76,11 +83,22 @@ get.seasonal = function(x,vec.Dates,myfun='mean'){
     is.d = vec.Dates.dm==nonleap.dm[i.d]
     seas[i.d] = do.call(myfun,list(x=x[is.d],na.rm=T))
   }
+  
+  # if fun="sd", when there is not many data for one day, the standard
+  # deviation can be equal to zero (or when bootstrap methods are applied).
+  # In that case, we remove zero values and test if we still have enough
+  # nonzero standard deviation
+  if(myfun=='sd'){
+    seas[seas==0] = NA
+    if(sum(is.na(seas))>200){
+      stop("not enough data to fit a seasonal cycle for this state")
+    }
+  }
 
   # smooth trend
   df = data.frame(seas=seas,d=1:365)
   dfz = stats::na.omit(df)
-  loess.out = loess(seas~d,data=dfz,span = 0.2)
+  loess.out = loess(seas~d,data=dfz,span = myspan)
   seas.smooth = predict(loess.out, df)
   return(seas.smooth)
 }
@@ -151,17 +169,19 @@ get.period.fitting.temp =  function(m.char){
 
 
 #==============================================================================
-# predict.trend
+# predicttrend
 #
 # Return the trend for an arbitrary period
 #
 # @param vec.slope slopes for the 12 months
 # @param vec.Dates vector of Dates to predict
 #
+# @export
+#
 # @return return a vector giving the long-term trend for the time period in vec.Dates
 #
 # @author Guillaume Evin
-predict.trend = function(vec.slope,vec.Dates){
+predicttrend = function(vec.slope,vec.Dates){
   # length of the simulations
   n = length(vec.Dates)
 
@@ -322,7 +342,7 @@ fit.GWex.temp = function(objGwexObs,listOption=NULL){
     smooth.slope = lowess(lm.slope)$y
     
     # predicted trend
-    t.trend = predict.trend(smooth.slope,vec.dates)
+    t.trend = predicttrend(smooth.slope,vec.dates)
     
     # return list
     list.trend = list(lm = lm.slope, smooth = smooth.slope)
@@ -645,7 +665,7 @@ sim.GWex.temp.1it = function(objGwexFit,vec.Dates,myseed,matSimPrec){
   hasTrend = objGwexFit@fit$listOption$hasTrend
   if(hasTrend){
     # trend for the simulaed period
-    t.trend = predict.trend(objGwexFit@fit$listPar$list.trend$smooth,vec.Dates)
+    t.trend = predicttrend(objGwexFit@fit$listPar$list.trend$smooth,vec.Dates)
     for(i.st in 1:p){
       # add trend
       Yt[,i.st] = Yt.detrend[,i.st] + t.trend
